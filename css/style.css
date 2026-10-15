@@ -1,0 +1,684 @@
+:root {
+  --bg: #ffffff;
+  --fg: #000000;
+  --line: #000000;
+  --muted: #6b6b6b;
+  --soft: #f4f4f4;
+  --font-mono: "Fusion Pixel 12px Proportional Simplified Chinese",
+    "Fusion Pixel 12px Proportional Latin", ui-monospace, SFMono-Regular, Consolas,
+    "Microsoft YaHei", monospace;
+  --font-pixel-mono: "Fusion Pixel 12px Monospaced Latin", ui-monospace, SFMono-Regular, Consolas,
+    monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #000000;
+  --fg: #ffffff;
+  --line: #ffffff;
+  --muted: #a2a2a2;
+  --soft: #171717;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+}
+
+a {
+  color: inherit;
+}
+
+/* 上栏 */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--bg);
+  border-bottom: 2px solid var(--line);
+}
+
+.tabs {
+  display: flex;
+}
+
+.tab {
+  display: inline-block;
+  padding: 5px 14px;
+  font-size: 16px;
+  line-height: 24px;
+  text-decoration: none;
+  border: 2px solid var(--line);
+  border-right: none;
+  white-space: nowrap;
+}
+
+.tab:last-child {
+  border-right: 2px solid var(--line);
+}
+
+.tab.active {
+  background: var(--line);
+  color: var(--bg);
+}
+
+.theme-toggle,
+.sort-toggle {
+  margin-left: auto;
+  padding: 5px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover,
+.sort-toggle:hover {
+  background: var(--soft);
+}
+
+.sort-toggle {
+  margin-left: 0;
+}
+
+/* 内容区 */
+.wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 28px 16px 64px;
+}
+
+/* 列表工具栏 */
+.list-bar {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--line);
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.search-input:focus {
+  outline: none;
+  background: var(--soft);
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 2px solid var(--line);
+}
+
+.search-results[hidden] {
+  display: none;
+}
+
+.search-item {
+  display: block;
+  padding: 8px 10px;
+  text-decoration: none;
+  border-bottom: 2px solid var(--line);
+}
+
+.search-item:last-child {
+  border-bottom: none;
+}
+
+.search-item:hover,
+.search-item.is-active {
+  background: var(--soft);
+}
+
+.search-item-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.search-item-snippet {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.search-empty {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* 文章列表 */
+.post-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-card {
+  border: 2px solid var(--line);
+}
+
+.post-card-link {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+  text-decoration: none;
+}
+
+.post-card-link:hover {
+  background: var(--soft);
+}
+
+.post-card-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.post-card-title {
+  margin: 0 0 10px;
+  font-size: clamp(20px, 3.6vw, 28px);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.post-card-excerpt {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(14px, 2.4vw, 16px);
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.post-card-date {
+  align-self: flex-end;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.post-card-cover {
+  flex: 0 0 180px;
+  width: 180px;
+}
+
+.post-card-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  object-fit: cover;
+}
+
+/* 文章详情 / 独立页 */
+.post-title,
+.page-title {
+  margin: 0 0 10px;
+  font-size: clamp(24px, 5vw, 36px);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.post-date {
+  display: block;
+  margin-bottom: 28px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.post-content {
+  font-size: 16px;
+  line-height: 1.9;
+  word-break: break-word;
+}
+
+.post-content h2 {
+  margin: 36px 0 12px;
+  padding-bottom: 6px;
+  font-size: 22px;
+  border-bottom: 2px solid var(--line);
+}
+
+.post-content h3 {
+  margin: 28px 0 10px;
+  font-size: 18px;
+}
+
+.post-content p {
+  margin: 0 0 16px;
+}
+
+.post-content ul,
+.post-content ol {
+  margin: 0 0 16px;
+  padding-left: 26px;
+}
+
+.post-content li {
+  margin-bottom: 6px;
+}
+
+.post-content a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.post-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.post-content blockquote {
+  margin: 0 0 16px;
+  padding: 4px 16px;
+  color: var(--muted);
+  border-left: 6px solid var(--line);
+}
+
+/* 代码用等宽的像素字体，保证字符对齐 */
+.post-content code,
+.post-content pre,
+.post-content pre code {
+  font-family: var(--font-pixel-mono);
+}
+
+.post-content code {
+  padding: 2px 5px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+}
+
+.post-content pre {
+  margin: 0 0 16px;
+  padding: 14px;
+  overflow-x: auto;
+  background: var(--soft);
+  border: 2px solid var(--line);
+}
+
+.post-content pre code {
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.post-content table {
+  width: 100%;
+  margin: 0 0 16px;
+  font-size: 15px;
+  border-collapse: collapse;
+}
+
+.post-content th,
+.post-content td {
+  padding: 8px 10px;
+  text-align: left;
+  border: 2px solid var(--line);
+}
+
+.post-content th {
+  background: var(--soft);
+}
+
+.post-content hr {
+  margin: 28px 0;
+  border: none;
+  border-top: 2px solid var(--line);
+}
+
+.post-content figure {
+  margin: 0 0 16px;
+}
+
+/* 上一篇 / 下一篇 */
+.post-nav {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-top: 40px;
+  padding-top: 16px;
+  font-size: 15px;
+  border-top: 2px solid var(--line);
+}
+
+.post-nav a {
+  text-decoration: underline;
+}
+
+.post-nav .next {
+  margin-left: auto;
+}
+
+/* 分页 */
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 32px;
+  font-size: 15px;
+}
+
+.page-nav a,
+.page-nav span {
+  padding: 4px 10px;
+  text-decoration: none;
+  border: 2px solid var(--line);
+}
+
+.page-nav .current {
+  background: var(--line);
+  color: var(--bg);
+}
+
+/* 空状态 */
+.empty {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* 小屏适配 */
+@media (max-width: 640px) {
+  .topbar {
+    padding: 8px 12px;
+  }
+
+  .tab,
+  .theme-toggle,
+  .sort-toggle {
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+
+  .search-input {
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+
+  .wrap {
+    padding: 20px 12px 48px;
+  }
+
+  /* 窄屏也保持"左文右图"，只是把缩略图收窄一点，给文字留出空间 */
+  .post-card-link {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .post-card-cover {
+    flex: 0 0 104px;
+    width: 104px;
+  }
+
+  .post-card-cover img {
+    min-height: 96px;
+  }
+}
+
+/* 彩蛋：连点主题按钮时的掉落层 */
+.egg-layer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.egg-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.egg-sprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 个人名片页（关于页） */
+.profile {
+  text-align: center;
+}
+
+.profile-avatar {
+  display: block;
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 24px;
+  object-fit: cover;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+}
+
+.profile-name {
+  margin: 0 0 20px;
+  font-size: clamp(28px, 6vw, 40px);
+  line-height: 1.3;
+}
+
+.profile-bio {
+  margin: 0 0 28px;
+  font-size: 16px;
+  line-height: 1.9;
+  text-align: left;
+}
+
+.profile-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 44px;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+
+.profile-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.profile-projects {
+  text-align: left;
+}
+
+.profile-projects h2 {
+  margin: 0 0 20px;
+  padding: 0;
+  font-size: 22px;
+  text-align: center;
+  border-bottom: none;
+}
+
+.project-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 2px solid var(--line);
+}
+
+.project-card h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.project-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .profile-avatar {
+    width: 130px;
+    height: 130px;
+    margin-bottom: 18px;
+  }
+
+  .project-card {
+    padding: 14px;
+  }
+}
+
+/* ==================== 页面切换与滚动动效 ==================== */
+
+/*
+  入场动画（html.nav-enter-forward / nav-enter-back）写在 layout.ejs 的 <head> 内联样式里，
+  这样新页面第一帧就带着动画，不会出现"先正常画出来、CSS 到了才突然消失再滑入"的闪烁。
+*/
+
+/* 离场：点击站内链接时内容区先滑出去 */
+body.nav-leave-forward .wrap {
+  animation: wrap-out-to-left 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+body.nav-leave-back .wrap {
+  animation: wrap-out-to-right 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes wrap-out-to-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-38px);
+  }
+}
+
+@keyframes wrap-out-to-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(38px);
+  }
+}
+
+/*
+  打开文章时的"容器扩展"层：从卡片矩形连续放大到整页。
+  这是离场侧的样式；新页面侧的同一套样式内联在 <head>，保证首帧就位。
+*/
+.card-expander {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 300;
+  background: var(--bg);
+  border: 2px solid var(--line);
+  transform-origin: top left;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* 文章卡片：滚动进入视口时向上归位，逐张错开 */
+.js-anim .post-card {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 480ms ease, transform 480ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.js-anim .post-card.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* 系统开启"减少动态效果"时全部关掉 */
+@media (prefers-reduced-motion: reduce) {
+  html.nav-enter-forward .wrap,
+  html.nav-enter-back .wrap,
+  body.nav-leave-forward .wrap,
+  body.nav-leave-back .wrap {
+    animation: none;
+  }
+
+  .js-anim .post-card {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+}
+
+/*
+  深浅色切换：切换瞬间给 <html> 挂上 .theme-fading，
+  让它下面所有元素的颜色在 320ms 内渐变过去，而不是硬切。
+*/
+html.theme-fading,
+html.theme-fading * {
+  transition: background-color 380ms ease-in-out, color 380ms ease-in-out,
+    border-color 380ms ease-in-out !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-fading,
+  html.theme-fading * {
+    transition: none !important;
+  }
+}

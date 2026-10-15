@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>W_zzzz&#39;s blog</title>
+  <meta name="description" content="一个黑白极简的像素风技术博客">
+  <style>
+    /* 关键样式内联：保证首屏绘制之前背景色和过渡动画就已就位，避免闪白或闪一下 */
+    html {
+      background-color: #ffffff;
+    }
+
+    html[data-theme="dark"] {
+      background-color: #000000;
+    }
+
+    /* 打开文章时的"容器扩展"层：从卡片矩形长成整页 */
+    .card-expander {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 300;
+      background-color: #ffffff;
+      border: 2px solid #000000;
+      transform-origin: top left;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    html[data-theme="dark"] .card-expander {
+      background-color: #000000;
+      border-color: #ffffff;
+    }
+
+    #post-expander {
+      display: none;
+    }
+
+    #post-expander.is-active {
+      display: block;
+    }
+
+    /*
+      解密动画就位之前先藏住文章文字，否则会先闪一帧原文再变乱码。
+      末尾的动画是兜底：万一脚本没跑起来，两秒后文字自动显示出来。
+    */
+    html.decrypt-pending .post-title,
+    html.decrypt-pending .post-content {
+      visibility: hidden;
+      animation: lofi-decrypt-reveal 0s linear 2000ms forwards;
+    }
+
+    @keyframes lofi-decrypt-reveal {
+      to {
+        visibility: visible;
+      }
+    }
+
+    /* 页面切换：内容区从侧边滑入 */
+    html.nav-enter-forward .wrap {
+      animation: lofi-enter-right 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    html.nav-enter-back .wrap {
+      animation: lofi-enter-left 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    @keyframes lofi-enter-right {
+      from {
+        opacity: 0;
+        transform: translateX(38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes lofi-enter-left {
+      from {
+        opacity: 0;
+        transform: translateX(-38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+  </style>
+  <script>
+    (function () {
+      var root = document.documentElement;
+
+      try {
+        var saved = localStorage.getItem('lofi-theme');
+        if (saved === 'dark' || saved === 'light') {
+          root.setAttribute('data-theme', saved);
+        }
+
+        root.className += ' js-anim';
+
+        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        var navDirection = sessionStorage.getItem('lofi-nav');
+        if (navDirection) {
+          sessionStorage.removeItem('lofi-nav');
+          if (!reduced) root.className += ' nav-enter-' + navDirection;
+        }
+
+        if (!reduced) root.className += ' decrypt-pending';
+
+      } catch (e) {}
+    })();
+  </script>
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/latin/Fusion-Pixel-12px-Proportional-Latin.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/zh_hans/Fusion-Pixel-12px-Proportional-Simplified-Chinese.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/monospaced-latin/Fusion-Pixel-12px-Monospaced-Latin.css">
+
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <div class="card-expander" id="post-expander" aria-hidden="true"></div>
+  <script>
+    (function () {
+      var expander = document.getElementById('post-expander');
+      var pending = null;
+
+      try {
+        pending = sessionStorage.getItem('lofi-post-rect');
+        sessionStorage.removeItem('lofi-post-rect');
+      } catch (e) {}
+
+      if (!expander) return;
+
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (!pending || noMotion) {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+        return;
+      }
+
+      /*
+        上一页已经把这块矩形放大到铺满整屏了，这里直接接住那个"满屏"状态，
+        再把它揭开露出文章内容，两段动作首尾相接成一次连续转场。
+      */
+      expander.classList.add('is-active');
+
+      requestAnimationFrame(function () {
+        expander.style.transition = 'opacity 420ms ease-out';
+        expander.style.opacity = '0';
+      });
+
+      window.setTimeout(function () {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+      }, 480);
+    })();
+  </script>
+
+  <header class="topbar">
+    <nav class="tabs">
+      <a class="tab active" href="/">我的文章</a>
+      <a class="tab" href="/about/">关于我自己</a>
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="切换深浅色">DARK_MODE</button>
+  </header>
+
+  <main class="wrap">
+    
+<h1 class="page-title">归档</h1>
+<ul class="post-list">
+  
+    <li class="post-card">
+      <a class="post-card-link" href="/2026/10/16/building-this-blog/">
+        <div class="post-card-main">
+          <h2 class="post-card-title">建站记录：从默认模板到像素风博客</h2>
+          <time class="post-card-date" datetime="2026-10-16T02:00:00.000Z">2026-10-16</time>
+        </div>
+      </a>
+    </li>
+  
+</ul>
+
+  </main>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      var themeFadeTimer = 0;
+
+      function render() {
+        btn.textContent = root.getAttribute('data-theme') === 'dark' ? 'LIGHT_MODE' : 'DARK_MODE';
+      }
+
+      render();
+
+      btn.addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        var wantsMotion = !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (wantsMotion) {
+          root.classList.add('theme-fading');
+          window.clearTimeout(themeFadeTimer);
+          themeFadeTimer = window.setTimeout(function () {
+            root.classList.remove('theme-fading');
+          }, 400);
+        }
+
+        root.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem('lofi-theme', next);
+        } catch (e) {}
+        render();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var bar = document.querySelector('.list-bar');
+      var input = document.getElementById('search-input');
+      var panel = document.getElementById('search-results');
+      if (!bar || !input || !panel) return;
+
+      var indexUrl = bar.getAttribute('data-search-index');
+      var indexData = null;
+      var pending = null;
+      var timer = null;
+      var activeIndex = -1;
+
+      function decodeText(value) {
+        var holder = document.createElement('textarea');
+        holder.innerHTML = value == null ? '' : String(value);
+        return holder.value;
+      }
+
+      function loadIndex() {
+        if (indexData) return Promise.resolve(indexData);
+        if (pending) return pending;
+        pending = fetch(indexUrl)
+          .then(function (response) {
+            return response.ok ? response.json() : [];
+          })
+          .then(function (list) {
+            indexData = (list || []).map(function (item) {
+              return {
+                title: decodeText(item.title),
+                url: item.url,
+                content: decodeText(item.content).replace(/\s+/g, ' ')
+              };
+            });
+            return indexData;
+          })
+          .catch(function () {
+            indexData = [];
+            return indexData;
+          });
+        return pending;
+      }
+
+      function snippetOf(item, keyword) {
+        var text = item.content;
+        var pos = text.toLowerCase().indexOf(keyword);
+        if (pos < 0) return text.slice(0, 60);
+        var start = Math.max(0, pos - 18);
+        var head = start > 0 ? '…' : '';
+        var tail = start + 66 < text.length ? '…' : '';
+        return head + text.slice(start, start + 66) + tail;
+      }
+
+      function closePanel() {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        activeIndex = -1;
+      }
+
+      function renderResults(hits, keyword) {
+        panel.hidden = false;
+        panel.innerHTML = '';
+        activeIndex = -1;
+
+        if (!hits.length) {
+          var empty = document.createElement('p');
+          empty.className = 'search-empty';
+          empty.textContent = '没有找到匹配的文章';
+          panel.appendChild(empty);
+          return;
+        }
+
+        hits.slice(0, 8).forEach(function (item) {
+          var link = document.createElement('a');
+          link.className = 'search-item';
+          link.href = item.url;
+
+          var title = document.createElement('span');
+          title.className = 'search-item-title';
+          title.textContent = item.title;
+
+          var snippet = document.createElement('span');
+          snippet.className = 'search-item-snippet';
+          snippet.textContent = snippetOf(item, keyword);
+
+          link.appendChild(title);
+          link.appendChild(snippet);
+          panel.appendChild(link);
+        });
+      }
+
+      function runSearch() {
+        var keyword = input.value.trim().toLowerCase();
+        if (!keyword) {
+          closePanel();
+          return;
+        }
+        loadIndex().then(function (list) {
+          if (input.value.trim().toLowerCase() !== keyword) return;
+          var hits = list.filter(function (item) {
+            return item.title.toLowerCase().indexOf(keyword) >= 0 ||
+              item.content.toLowerCase().indexOf(keyword) >= 0;
+          });
+          renderResults(hits, keyword);
+        });
+      }
+
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(runSearch, 180);
+      });
+
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          input.value = '';
+          closePanel();
+          return;
+        }
+
+        var items = panel.hidden ? [] : Array.prototype.slice.call(panel.querySelectorAll('.search-item'));
+        if (!items.length) return;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          activeIndex = event.key === 'ArrowDown'
+            ? (activeIndex + 1) % items.length
+            : (activeIndex - 1 + items.length) % items.length;
+          items.forEach(function (el, i) {
+            el.classList.toggle('is-active', i === activeIndex);
+          });
+        } else if (event.key === 'Enter') {
+          var target = items[activeIndex >= 0 ? activeIndex : 0];
+          if (target) {
+            event.preventDefault();
+            window.location.href = target.getAttribute('href');
+          }
+        }
+      });
+
+      input.addEventListener('focus', function () {
+        if (input.value.trim()) runSearch();
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!bar.contains(event.target)) closePanel();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sortBtn = document.getElementById('sort-toggle');
+      var list = document.querySelector('.post-list');
+      if (!sortBtn || !list) return;
+
+      var labels = { desc: '时间倒序 ↓', asc: '时间正序 ↑' };
+      var currentOrder = 'desc';
+      var FLIP_MS = 420;
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function timestampOf(item) {
+        var time = item.querySelector('time[datetime]');
+        var value = time ? Date.parse(time.getAttribute('datetime')) : NaN;
+        return isNaN(value) ? 0 : value;
+      }
+
+      function apply(order, animate) {
+        var items = Array.prototype.slice.call(list.children);
+        var previousTop = new Map();
+
+        if (animate && !reducedMotion) {
+          items.forEach(function (item) {
+            previousTop.set(item, item.getBoundingClientRect().top);
+          });
+        }
+
+        var sorted = items.slice().sort(function (a, b) {
+          return order === 'asc' ? timestampOf(a) - timestampOf(b) : timestampOf(b) - timestampOf(a);
+        });
+
+        sorted.forEach(function (item) {
+          list.appendChild(item);
+        });
+
+        currentOrder = order;
+        sortBtn.textContent = labels[order];
+
+        if (!previousTop.size) return;
+
+        sorted.forEach(function (item) {
+          var before = previousTop.get(item);
+          if (before === undefined) return;
+
+          var delta = before - item.getBoundingClientRect().top;
+          if (!delta) return;
+
+          item.style.transition = 'none';
+          item.style.transform = 'translateY(' + delta + 'px)';
+          void item.offsetHeight;
+          item.style.transition = 'transform ' + FLIP_MS + 'ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+          item.style.transform = 'translateY(0)';
+
+          window.setTimeout(function () {
+            item.style.transition = '';
+            item.style.transform = '';
+          }, FLIP_MS + 60);
+        });
+      }
+
+      var savedOrder = 'desc';
+      try {
+        savedOrder = localStorage.getItem('lofi-sort') === 'asc' ? 'asc' : 'desc';
+      } catch (e) {}
+      apply(savedOrder, false);
+
+      sortBtn.addEventListener('click', function () {
+        var next = currentOrder === 'asc' ? 'desc' : 'asc';
+        apply(next, true);
+        try {
+          localStorage.setItem('lofi-sort', next);
+        } catch (e) {}
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sprites = ["/images/91/thumb/1.png","/images/91/thumb/2.png","/images/91/thumb/3.png","/images/91/thumb/4.png"];
+      var matterUrl = '/js/matter.min.js';
+      var btn = document.getElementById('theme-toggle');
+      if (!btn || !sprites.length) return;
+
+      var CLICK_WINDOW = 2000;
+      var CLICK_NEEDED = 6;
+      var RAIN_MS = 10000;
+      var SPAWN_INTERVAL = 110;
+      var START_OFFSET = 60;
+      var MIN_WIDTH = 40;
+      var MAX_WIDTH = 110;
+      var TIME_SCALE = 0.5;
+      var STEP_MS = 16.666;
+      var REMOVE_MARGIN = 220;
+      var SPRING_STIFFNESS = 0.3;
+      var SPRING_DAMPING = 0.1;
+      var MAX_SQUEEZE = 0.25;
+
+      var clicks = [];
+      var running = false;
+      var engine = null;
+      var bodyItemMap = new Map();
+      var floorBody = null;
+      var sideWalls = [];
+      var layer = null;
+      var items = [];
+      var lastSpawn = 0;
+      var startedAt = 0;
+      var rafId = 0;
+      var matterReady = null;
+      var preloaded = false;
+
+      var spritesLoaded = sprites.map(function (src) {
+        var image = new Image();
+        image.src = src;
+        return image;
+      });
+
+      function viewport() {
+        return { w: window.innerWidth, h: window.innerHeight };
+      }
+
+      function loadMatter() {
+        if (window.Matter) return Promise.resolve(window.Matter);
+        if (matterReady) return matterReady;
+
+        matterReady = new Promise(function (resolve, reject) {
+          var tag = document.createElement('script');
+          tag.src = matterUrl;
+          tag.async = true;
+          tag.onload = function () {
+            resolve(window.Matter);
+          };
+          tag.onerror = function () {
+            matterReady = null;
+            reject(new Error('matter load failed'));
+          };
+          document.head.appendChild(tag);
+        });
+
+        return matterReady;
+      }
+
+      function warmUp() {
+        if (preloaded) return;
+        preloaded = true;
+        loadMatter().catch(function () {});
+      }
+
+      function buildWorld(Matter) {
+        var vp = viewport();
+        var localEngine = Matter.Engine.create();
+
+        localEngine.gravity.y = 1;
+        localEngine.timing.timeScale = TIME_SCALE;
+
+        var wallOptions = { isStatic: true, friction: 0.4, restitution: 0.1 };
+        var wallHeight = vp.h * 3;
+
+        sideWalls = [
+          Matter.Bodies.rectangle(-40, vp.h / 2, 80, wallHeight, wallOptions),
+          Matter.Bodies.rectangle(vp.w + 40, vp.h / 2, 80, wallHeight, wallOptions)
+        ];
+        floorBody = Matter.Bodies.rectangle(vp.w / 2, vp.h + 40, vp.w * 4, 80, wallOptions);
+
+        Matter.Composite.add(localEngine.world, sideWalls.concat([floorBody]));
+        return localEngine;
+      }
+
+      function sync(item) {
+        var body = item.body;
+        var left = body.position.x - item.w / 2;
+        var top = body.position.y - item.h / 2;
+        item.el.style.transform =
+          'translate3d(' + left + 'px,' + top + 'px,0) rotate(' + body.angle + 'rad)';
+      }
+
+      function updateDeform(item) {
+        if (!item.deform && !item.deformVel) {
+          if (item.scaleX !== 1 || item.scaleY !== 1) {
+            item.sprite.style.transform = '';
+            item.scaleX = 1;
+            item.scaleY = 1;
+          }
+          return;
+        }
+
+        item.deformVel += -SPRING_STIFFNESS * item.deform - SPRING_DAMPING * item.deformVel;
+        item.deform += item.deformVel;
+
+        if (Math.abs(item.deform) < 0.002 && Math.abs(item.deformVel) < 0.002) {
+          item.deform = 0;
+          item.deformVel = 0;
+        }
+
+        var scaleX = 1 - item.deform * item.deformAx;
+        var scaleY = 1 - item.deform * item.deformAy;
+
+        if (Math.abs(scaleX - item.scaleX) > 0.002 || Math.abs(scaleY - item.scaleY) > 0.002) {
+          item.scaleX = scaleX;
+          item.scaleY = scaleY;
+          item.sprite.style.transform =
+            'scale(' + scaleX.toFixed(3) + ',' + scaleY.toFixed(3) + ')';
+        }
+      }
+
+      function squeezeBody(body, normal, impact) {
+        var item = bodyItemMap.get(body.id);
+        if (!item) return;
+
+        var localAngle = Math.atan2(normal.y, normal.x) - body.angle;
+        item.deformAx = Math.abs(Math.cos(localAngle));
+        item.deformAy = Math.abs(Math.sin(localAngle));
+        item.deform = Math.max(item.deform, impact);
+        item.deformVel = 0;
+      }
+
+      function bindCollisions(Matter) {
+        Matter.Events.on(engine, 'collisionStart', function (event) {
+          var pairs = event.pairs;
+
+          for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i];
+            var velocityA = pair.bodyA.velocity;
+            var velocityB = pair.bodyB.velocity;
+            var dx = velocityA.x - velocityB.x;
+            var dy = velocityA.y - velocityB.y;
+            var impact = Math.min(MAX_SQUEEZE, Math.sqrt(dx * dx + dy * dy) * 0.07);
+
+            if (impact < 0.03) continue;
+
+            var normal = pair.collision.normal;
+            squeezeBody(pair.bodyA, normal, impact);
+            squeezeBody(pair.bodyB, normal, impact);
+          }
+        });
+      }
+
+      function spawn(Matter) {
+        var sprite = spritesLoaded[Math.floor(Math.random() * spritesLoaded.length)];
+        var width = MIN_WIDTH + Math.random() * (MAX_WIDTH - MIN_WIDTH);
+        var ratio = sprite.naturalWidth ? sprite.naturalHeight / sprite.naturalWidth : 1.3;
+        var height = width * ratio;
+        var vp = viewport();
+
+        var el = document.createElement('div');
+        el.className = 'egg-item';
+        el.style.width = width + 'px';
+        el.style.height = height + 'px';
+
+        var spriteEl = document.createElement('img');
+        spriteEl.className = 'egg-sprite';
+        spriteEl.src = sprite.src;
+        spriteEl.alt = '';
+        el.appendChild(spriteEl);
+        layer.appendChild(el);
+
+        var body = Matter.Bodies.rectangle(
+          width / 2 + Math.random() * Math.max(0, vp.w - width),
+          -height - START_OFFSET - Math.random() * 90,
+          width,
+          height,
+          {
+            restitution: 0.6,
+            friction: 0.3,
+            frictionStatic: 0.6,
+            frictionAir: 0.006,
+            density: 0.0012,
+            slop: 0.02
+          }
+        );
+
+        Matter.Body.setAngle(body, (Math.random() - 0.5) * 0.7);
+        Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+        Matter.Composite.add(engine.world, body);
+
+        var item = {
+          el: el,
+          sprite: spriteEl,
+          body: body,
+          w: width,
+          h: height,
+          deform: 0,
+          deformVel: 0,
+          deformAx: 1,
+          deformAy: 0,
+          scaleX: 1,
+          scaleY: 1
+        };
+
+        bodyItemMap.set(body.id, item);
+        sync(item);
+        items.push(item);
+      }
+
+      function removeItem(item) {
+        if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
+        if (engine) Matter.Composite.remove(engine.world, item.body);
+        bodyItemMap.delete(item.body.id);
+      }
+
+      function step(now) {
+        var Matter = window.Matter;
+        var vp = viewport();
+        var elapsed = now - startedAt;
+
+        if (elapsed < RAIN_MS) {
+          if (now - lastSpawn >= SPAWN_INTERVAL) {
+            lastSpawn = now;
+            spawn(Matter);
+          }
+        } else if (floorBody) {
+          Matter.Composite.remove(engine.world, floorBody);
+          floorBody = null;
+        }
+
+        Matter.Engine.update(engine, STEP_MS);
+
+        for (var i = items.length - 1; i >= 0; i--) {
+          var item = items[i];
+          updateDeform(item);
+          sync(item);
+
+          if (item.body.position.y - item.h / 2 > vp.h + REMOVE_MARGIN) {
+            removeItem(item);
+            items.splice(i, 1);
+          }
+        }
+
+        if (!floorBody && !items.length) {
+          stop();
+          return;
+        }
+
+        rafId = requestAnimationFrame(step);
+      }
+
+      function stop() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+
+        items = [];
+        floorBody = null;
+        sideWalls = [];
+        bodyItemMap.clear();
+
+        if (engine && window.Matter) {
+          window.Matter.Engine.clear(engine);
+        }
+        engine = null;
+
+        if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
+        layer = null;
+        running = false;
+      }
+
+      function start() {
+        if (running) return;
+
+        loadMatter()
+          .then(function (Matter) {
+            if (!Matter || running) return;
+
+            running = true;
+            items = [];
+            lastSpawn = 0;
+            startedAt = performance.now();
+
+            layer = document.createElement('div');
+            layer.className = 'egg-layer';
+            layer.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(layer);
+
+            engine = buildWorld(Matter);
+            bindCollisions(Matter);
+            rafId = requestAnimationFrame(step);
+          })
+          .catch(function () {});
+      }
+
+      btn.addEventListener('click', function () {
+        warmUp();
+
+        var now = Date.now();
+        clicks = clicks.filter(function (stamp) {
+          return now - stamp < CLICK_WINDOW;
+        });
+        clicks.push(now);
+
+        if (running || clicks.length < CLICK_NEEDED) return;
+        clicks = [];
+        start();
+      });
+
+      window.addEventListener('resize', function () {
+        if (!running || !window.Matter) return;
+
+        var vp = viewport();
+
+        if (sideWalls.length === 2) {
+          window.Matter.Body.setPosition(sideWalls[0], { x: -40, y: vp.h / 2 });
+          window.Matter.Body.setPosition(sideWalls[1], { x: vp.w + 40, y: vp.h / 2 });
+        }
+        if (floorBody) {
+          window.Matter.Body.setPosition(floorBody, { x: vp.w / 2, y: vp.h + 40 });
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var body = document.body;
+      var HOME_URL = '/';
+      var ABOUT_URL = '/about/';
+      var ORDER = [HOME_URL, ABOUT_URL];
+      var NAV_KEY = 'lofi-nav';
+      var POST_KEY = 'lofi-post-rect';
+      var LEAVE_MS = 200;
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var busy = false;
+
+      function pageIndex() {
+        var path = window.location.pathname;
+        for (var i = 0; i < ORDER.length; i++) {
+          if (path === ORDER[i]) return i;
+        }
+        return -1;
+      }
+
+      function navigate(url, direction) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        try {
+          sessionStorage.setItem(NAV_KEY, direction);
+        } catch (e) {}
+
+        body.classList.add('nav-leave-' + direction);
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, LEAVE_MS);
+      }
+
+      /*
+        打开文章：把卡片的屏幕位置和尺寸交给下一个页面，
+        由那边用一个同样的矩形扩展成整页，形成"卡片长成页面"的连续感。
+      */
+      function navigatePost(url, card) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        var rect = card.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+
+        try {
+          sessionStorage.setItem(POST_KEY, '1');
+        } catch (e) {}
+
+        var expander = document.createElement('div');
+        expander.className = 'card-expander';
+        expander.style.transform =
+          'translate(' + rect.left + 'px,' + rect.top + 'px) scale(' +
+          rect.width / vw + ',' + rect.height / vh + ')';
+        document.body.appendChild(expander);
+
+        void expander.offsetWidth;
+
+        expander.style.transition = 'transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+        expander.style.transform = 'translate(0,0) scale(1,1)';
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, 430);
+      }
+
+      function goForward() {
+        var index = pageIndex();
+        if (index < 0 || index + 1 >= ORDER.length) return;
+        navigate(ORDER[index + 1], 'forward');
+      }
+
+      function goBack() {
+        var index = pageIndex();
+        if (index < 0) {
+          navigate(HOME_URL, 'back');
+          return;
+        }
+        if (index <= 0) return;
+        navigate(ORDER[index - 1], 'back');
+      }
+
+      /* 左右滑动切换页面 */
+      var startX = 0;
+      var startY = 0;
+      var tracking = false;
+
+      document.addEventListener('touchstart', function (event) {
+        if (event.touches.length !== 1) {
+          tracking = false;
+          return;
+        }
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        tracking = true;
+      }, { passive: true });
+
+      document.addEventListener('touchend', function (event) {
+        if (!tracking) return;
+        tracking = false;
+
+        var touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+
+        if (Math.abs(dx) < 70) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+        if (dx < 0) goForward();
+        else goBack();
+      }, { passive: true });
+
+      /* 键盘左右方向键，桌面端也能翻页 */
+      document.addEventListener('keydown', function (event) {
+        var tag = (event.target && event.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (event.key === 'ArrowRight') goForward();
+        else if (event.key === 'ArrowLeft') goBack();
+      });
+
+      /* 站内链接：先播离场动画，再跳转 */
+      document.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        var link = event.target && event.target.closest ? event.target.closest('a') : null;
+        if (!link) return;
+
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) !== '/') return;
+        if (link.target && link.target !== '_self') return;
+
+        var url;
+        try {
+          url = new URL(link.href, window.location.href);
+        } catch (e) {
+          return;
+        }
+        if (url.origin !== window.location.origin) return;
+        if (url.pathname === window.location.pathname) return;
+
+        event.preventDefault();
+
+        var card = link.closest('.post-card');
+        if (card) {
+          navigatePost(url.pathname, card);
+          return;
+        }
+
+        var targetIndex = ORDER.indexOf(url.pathname);
+        var currentIndex = pageIndex();
+        var direction =
+          targetIndex >= 0 && currentIndex >= 0 && targetIndex < currentIndex ? 'back' : 'forward';
+        navigate(url.pathname, direction);
+      });
+
+      /* 文章卡片滚动进入视口时依次归位 */
+      var cards = document.querySelectorAll('.post-card');
+      if (cards.length) {
+        if ('IntersectionObserver' in window && !reduced) {
+          var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              var card = entry.target;
+              card.style.transitionDelay = (card.dataset.animIndex || 0) * 60 + 'ms';
+              card.classList.add('is-in');
+              observer.unobserve(card);
+            });
+          }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+          Array.prototype.forEach.call(cards, function (card, index) {
+            card.dataset.animIndex = index % 6;
+            observer.observe(card);
+          });
+        } else {
+          Array.prototype.forEach.call(cards, function (card) {
+            card.classList.add('is-in');
+          });
+        }
+      }
+    })();
+  </script>
+
+  <script>
+    (function () {
+      /* 固定"每秒还原多少字"，长度不同的内容自动得到不同的总时长，手感才一致 */
+      var SPEED = 80;
+      var MIN_DURATION = 400;
+      var POST_DELAY = 300;
+      var CHARS =
+        '的一是了我不人在他有这个上们来到时大地为子中你说生国年着就那和要她出也得里后自以会家可下而过天去能对小多然于心学么之都好看起发当没成只如事把还用第样道想作种开美总从无情己面最女但现前些所同日手又行意动方期它头经长儿回位分爱老因很给名法间斯知世什两次使身者被高已亲其进此话常与活正感';
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (noMotion || !document.createTreeWalker) return;
+
+      var pool = '';
+
+      function randomChars(length) {
+        var out = '';
+        for (var i = 0; i < length; i++) {
+          out += CHARS.charAt(Math.floor(Math.random() * CHARS.length));
+        }
+        return out;
+      }
+
+      function garbles(length) {
+        while (pool.length < length + 64) {
+          pool += randomChars(256);
+        }
+        var offset = Math.floor(Math.random() * (pool.length - length));
+        return pool.substr(offset, length);
+      }
+
+      function collect(root) {
+        var list = [];
+        if (!root) return list;
+
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        var node = walker.nextNode();
+
+        while (node) {
+          var value = node.nodeValue;
+          if (value && value.replace(/\s/g, '').length) {
+            list.push({ node: node, text: value });
+          }
+          node = walker.nextNode();
+        }
+
+        return list;
+      }
+
+      /* 把若干区域的文字拼成一条序列，按进度从左到右、从上到下还原 */
+      function play(roots, delay, onReady) {
+        var entries = [];
+        var total = 0;
+
+        for (var i = 0; i < roots.length; i++) {
+          var found = collect(roots[i]);
+          for (var j = 0; j < found.length; j++) {
+            entries.push({ node: found[j].node, text: found[j].text, start: total, drawn: -1 });
+            total += found[j].text.length;
+          }
+        }
+
+        if (!total) {
+          if (onReady) onReady();
+          return;
+        }
+
+        function draw(revealed) {
+          for (var k = 0; k < entries.length; k++) {
+            var entry = entries[k];
+            var length = entry.text.length;
+            var done = revealed - entry.start;
+
+            if (done < 0) done = 0;
+            else if (done > length) done = length;
+
+            if (done === entry.drawn) continue;
+
+            entry.drawn = done;
+            entry.node.nodeValue =
+              done >= length ? entry.text : entry.text.slice(0, done) + garbles(length - done);
+          }
+        }
+
+        function animate() {
+          var startedAt = 0;
+          var duration = Math.max(MIN_DURATION, (total / SPEED) * 1000);
+
+          function tick(now) {
+            if (!startedAt) startedAt = now;
+
+            var progress = (now - startedAt) / duration;
+            if (progress > 1) progress = 1;
+
+            draw(Math.round(progress * total));
+
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              for (var m = 0; m < entries.length; m++) {
+                entries[m].node.nodeValue = entries[m].text;
+              }
+            }
+          }
+
+          requestAnimationFrame(tick);
+        }
+
+        /* 先整段变成乱码再解除隐藏，保证第一次被看到时就是乱码 */
+        draw(0);
+        if (onReady) onReady();
+
+        if (delay > 0) window.setTimeout(animate, delay);
+        else animate();
+      }
+
+      var postRoots = [];
+      var postTitle = document.querySelector('.post-title');
+      var postContent = document.querySelector('.post-content');
+
+      if (postTitle) postRoots.push(postTitle);
+      if (postContent) postRoots.push(postContent);
+
+      if (postRoots.length) {
+        /* 文章页：立刻变乱码并解除隐藏，等卡片扩展层揭开一点再开始逐字还原 */
+        play(postRoots, POST_DELAY, function () {
+          document.documentElement.classList.remove('decrypt-pending');
+        });
+        return;
+      }
+
+      /* 列表页：卡片进入视口时各自解密 */
+      var cards = document.querySelectorAll('.post-card');
+      if (!cards.length || !('IntersectionObserver' in window)) return;
+
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+
+          var roots = [];
+          var title = entry.target.querySelector('.post-card-title');
+          var excerpt = entry.target.querySelector('.post-card-excerpt');
+
+          if (title) roots.push(title);
+          if (excerpt) roots.push(excerpt);
+
+          play(roots, 0);
+        });
+      }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+      Array.prototype.forEach.call(cards, function (card) {
+        observer.observe(card);
+      });
+    })();
+  </script>
+
+</body>
+</html>
