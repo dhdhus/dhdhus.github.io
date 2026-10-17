@@ -682,3 +682,27 @@ html.theme-fading * {
     transition: none !important;
   }
 }
+
+/* ==================== 页脚 ==================== */
+
+.site-footer {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+  border-top: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 2px solid currentColor;
+}
+
+.site-footer a:hover {
+  color: var(--bg);
+  background: var(--fg);
+}
