@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>在本机跑 ComfyUI + Anima：一个 2B 动漫模型的完整落地记录 | W_zzzz&#39;s blog</title>
+  <meta name="description" content="一个黑白极简的像素风技术博客">
+  <style>
+    /* 关键样式内联：保证首屏绘制之前背景色和过渡动画就已就位，避免闪白或闪一下 */
+    html {
+      background-color: #ffffff;
+    }
+
+    html[data-theme="dark"] {
+      background-color: #000000;
+    }
+
+    /* 打开文章时的"容器扩展"层：从卡片矩形长成整页 */
+    .card-expander {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 300;
+      background-color: #ffffff;
+      border: 2px solid #000000;
+      transform-origin: top left;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    html[data-theme="dark"] .card-expander {
+      background-color: #000000;
+      border-color: #ffffff;
+    }
+
+    #post-expander {
+      display: none;
+    }
+
+    #post-expander.is-active {
+      display: block;
+    }
+
+    /*
+      解密动画就位之前先藏住文章文字，否则会先闪一帧原文再变乱码。
+      末尾的动画是兜底：万一脚本没跑起来，两秒后文字自动显示出来。
+    */
+    html.decrypt-pending .post-title,
+    html.decrypt-pending .post-content {
+      visibility: hidden;
+      animation: lofi-decrypt-reveal 0s linear 2000ms forwards;
+    }
+
+    @keyframes lofi-decrypt-reveal {
+      to {
+        visibility: visible;
+      }
+    }
+
+    /* 页面切换：内容区从侧边滑入 */
+    html.nav-enter-forward .wrap {
+      animation: lofi-enter-right 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    html.nav-enter-back .wrap {
+      animation: lofi-enter-left 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    @keyframes lofi-enter-right {
+      from {
+        opacity: 0;
+        transform: translateX(38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes lofi-enter-left {
+      from {
+        opacity: 0;
+        transform: translateX(-38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+  </style>
+  <script>
+    (function () {
+      var root = document.documentElement;
+
+      try {
+        var saved = localStorage.getItem('lofi-theme');
+        if (saved === 'dark' || saved === 'light') {
+          root.setAttribute('data-theme', saved);
+        }
+
+        root.className += ' js-anim';
+
+        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        var navDirection = sessionStorage.getItem('lofi-nav');
+        if (navDirection) {
+          sessionStorage.removeItem('lofi-nav');
+          if (!reduced) root.className += ' nav-enter-' + navDirection;
+        }
+
+        if (!reduced) root.className += ' decrypt-pending';
+
+      } catch (e) {}
+    })();
+  </script>
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/latin/Fusion-Pixel-12px-Proportional-Latin.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/zh_hans/Fusion-Pixel-12px-Proportional-Simplified-Chinese.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/monospaced-latin/Fusion-Pixel-12px-Monospaced-Latin.css">
+
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <div class="card-expander" id="post-expander" aria-hidden="true"></div>
+  <script>
+    (function () {
+      var expander = document.getElementById('post-expander');
+      var pending = null;
+
+      try {
+        pending = sessionStorage.getItem('lofi-post-rect');
+        sessionStorage.removeItem('lofi-post-rect');
+      } catch (e) {}
+
+      if (!expander) return;
+
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (!pending || noMotion) {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+        return;
+      }
+
+      /*
+        上一页已经把这块矩形放大到铺满整屏了，这里直接接住那个"满屏"状态，
+        再把它揭开露出文章内容，两段动作首尾相接成一次连续转场。
+      */
+      expander.classList.add('is-active');
+
+      requestAnimationFrame(function () {
+        expander.style.transition = 'opacity 420ms ease-out';
+        expander.style.opacity = '0';
+      });
+
+      window.setTimeout(function () {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+      }, 480);
+    })();
+  </script>
+
+  <header class="topbar">
+    <nav class="tabs">
+      <a class="tab active" href="/">我的文章</a>
+      <a class="tab" href="/about/">关于我自己</a>
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="切换深浅色">DARK_MODE</button>
+  </header>
+
+  <main class="wrap">
+    <article class="post">
+  <h1 class="post-title">在本机跑 ComfyUI + Anima：一个 2B 动漫模型的完整落地记录</h1>
+  <time class="post-date" datetime="2026-11-09T23:20:00.000Z">2026-11-10</time>
+  <div class="post-content"><p><img src="/images/comfyui-anima.jpg" alt="封面"></p>
+<p>这台机器上跑生成式模型有一段时间了，主力一直是 ComfyUI 便携版配 Anima。这套组合有意思的地方在于它不是 SD&#x2F;SDXL 那条线上的东西——底模是 Cosmos 系的 DiT，文本编码器干脆换成了 Qwen3，整个工作流的接线方式、提示词写法、参数直觉都得重新校准一遍。</p>
+<p>这篇把从装到跑、从单张到批量流水线的过程完整记一遍，参数都是本机实测的值，不是抄的推荐区间。</p>
+<span id="more"></span>
+
+<h2 id="一、ComfyUI-装在哪，怎么起"><a href="#一、ComfyUI-装在哪，怎么起" class="headerlink" title="一、ComfyUI 装在哪，怎么起"></a>一、ComfyUI 装在哪，怎么起</h2><p>便携版解压在 <code>E:\AI\COMFYUI\ComfyUI_windows_portable\</code>，实际干活的目录是：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">E:\AI\COMFYUI\ComfyUI_windows_portable\ComfyUI\</span><br><span class="line">├── main.py</span><br><span class="line">├── models\</span><br><span class="line">│   ├── diffusion_models\   # UNET / DiT 主模型</span><br><span class="line">│   ├── text_encoders\      # 文本编码器</span><br><span class="line">│   └── vae\                # VAE</span><br><span class="line">├── input\</span><br><span class="line">└── output\                 # 出图落盘的地方</span><br></pre></td></tr></table></figure>
+
+<p>版本 0.39.0。启动就是双击上级目录的 <code>run_nvidia_gpu.bat</code>，它自带一份嵌入式 Python，不需要系统里装 CUDA 环境。起来之后 Web 界面在 <code>http://127.0.0.1:8188</code>，同时这个端口本身就是完整的 HTTP API——后面批量出图全靠它。</p>
+<p>出图默认落在 <code>output\&lt;filename_prefix 前缀&gt;\</code> 下面，前缀在 SaveImage 节点里填，所以可以按项目分子目录，不会和别的批次混在一起。</p>
+<blockquote>
+<p>便携版有个细节：<code>models\diffusion_models</code> 和老版本叫的 <code>models\unet</code> 其实是同一个位置，ComfyUI 两个名字都认。放哪边都行，但别两边都放一份，白占硬盘。</p>
+</blockquote>
+<h2 id="二、Anima-是什么"><a href="#二、Anima-是什么" class="headerlink" title="二、Anima 是什么"></a>二、Anima 是什么</h2><p>Anima 是 CircleStone Labs 和 Comfy Org 合作的东西，几个关键事实直接决定后面怎么用：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>架构</td>
+<td>2B DiT（Diffusion Transformer），<strong>不是 SDXL 血统</strong></td>
+</tr>
+<tr>
+<td>底模</td>
+<td>NVIDIA Cosmos-Predict2-2B-Text2Image</td>
+</tr>
+<tr>
+<td>文本编码器</td>
+<td>Qwen3-0.6B</td>
+</tr>
+<tr>
+<td>VAE</td>
+<td>Qwen-Image VAE</td>
+</tr>
+<tr>
+<td>主模型体积</td>
+<td>约 4.18 GB（safetensors）</td>
+</tr>
+<tr>
+<td>显存</td>
+<td>不量化约 7 GB 可跑</td>
+</tr>
+<tr>
+<td>训练数据</td>
+<td>数百万动漫插画 + 约 80 万非动漫艺术作品，无合成数据</td>
+</tr>
+<tr>
+<td>动漫数据截止</td>
+<td>2025-09</td>
+</tr>
+<tr>
+<td>许可</td>
+<td>模型权重非商用；生成图可商用</td>
+</tr>
+</tbody></table>
+<p>版本线有好几条：</p>
+<ul>
+<li><strong>Base v1.0</strong>：基座</li>
+<li><strong>Aesthetic v1.0 &#x2F; v1.0b &#x2F; v1.1</strong>：调过美学的版本，本机用的是 <code>v1.1</code></li>
+<li><strong>Turbo v1.0 &#x2F; v1.1</strong>：少步数版本</li>
+<li><strong>preview1–3</strong>：早期预览</li>
+</ul>
+<p>这几个版本共用同一套 CLIP 和 VAE。也就是说换主模型的时候，另外两个文件不用动——但如果哪天换了编码器或 VAE，三件套必须一起换，混搭出来的图是糊的、颜色也是错的。这三个文件是一次训练里配套产出的，没有独立替换的余地。</p>
+<h2 id="三、三件套怎么挂"><a href="#三、三件套怎么挂" class="headerlink" title="三、三件套怎么挂"></a>三、三件套怎么挂</h2><p>工作流开头三个 Loader 节点，对应三个文件：</p>
+<table>
+<thead>
+<tr>
+<th>节点</th>
+<th>文件</th>
+<th>放在</th>
+<th>关键设置</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>UNETLoader</code></td>
+<td><code>anima-aesthetic-v1.1.safetensors</code></td>
+<td><code>models\diffusion_models\</code></td>
+<td><code>weight_dtype</code> 用 default</td>
+</tr>
+<tr>
+<td><code>CLIPLoader</code></td>
+<td><code>qwen_3_06b_base.safetensors</code></td>
+<td><code>models\text_encoders\</code></td>
+<td><code>type</code> 选 <strong>stable_diffusion</strong></td>
+</tr>
+<tr>
+<td><code>VAELoader</code></td>
+<td><code>qwen_image_vae.safetensors</code></td>
+<td><code>models\vae\</code></td>
+<td>无</td>
+</tr>
+</tbody></table>
+<p>CLIPLoader 那个 <code>type</code> 是第一个坑。下拉框里没有 “qwen” 这个选项，第一次挂的时候很容易以为要选 <code>qwen_image</code> 之类。实际上选 <code>stable_diffusion</code> 就对了——它只是告诉 ComfyUI 按通用文本编码器的方式去加载这个权重，Qwen3 本身的结构是能识别的。选错的话要么直接报错，要么加载成功但输出一堆噪声。</p>
+<h2 id="四、九节点工作流"><a href="#四、九节点工作流" class="headerlink" title="四、九节点工作流"></a>四、九节点工作流</h2><p>整个流程是 9 个节点，接起来是条直线：</p>
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;1&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;UNETLoader&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;unet_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;anima-aesthetic-v1.1.safetensors&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;weight_dtype&quot;</span><span class="punctuation">:</span> <span class="string">&quot;default&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;2&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;CLIPLoader&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;clip_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;qwen_3_06b_base.safetensors&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;stable_diffusion&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;3&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;VAELoader&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;vae_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;qwen_image_vae.safetensors&quot;</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;4&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;CLIPTextEncode&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;text&quot;</span><span class="punctuation">:</span> <span class="string">&quot;正向提示词&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;clip&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;2&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;5&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;CLIPTextEncode&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;text&quot;</span><span class="punctuation">:</span> <span class="string">&quot;反向提示词&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;clip&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;2&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;6&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;EmptyLatentImage&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;width&quot;</span><span class="punctuation">:</span> <span class="number">1024</span><span class="punctuation">,</span> <span class="attr">&quot;height&quot;</span><span class="punctuation">:</span> <span class="number">1344</span><span class="punctuation">,</span> <span class="attr">&quot;batch_size&quot;</span><span class="punctuation">:</span> <span class="number">2</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;7&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;KSampler&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;seed&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span> <span class="attr">&quot;steps&quot;</span><span class="punctuation">:</span> <span class="number">32</span><span class="punctuation">,</span> <span class="attr">&quot;cfg&quot;</span><span class="punctuation">:</span> <span class="number">4.5</span><span class="punctuation">,</span></span><br><span class="line">                     <span class="attr">&quot;sampler_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;er_sde&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;scheduler&quot;</span><span class="punctuation">:</span> <span class="string">&quot;simple&quot;</span><span class="punctuation">,</span></span><br><span class="line">                     <span class="attr">&quot;denoise&quot;</span><span class="punctuation">:</span> <span class="number">1.0</span><span class="punctuation">,</span> <span class="attr">&quot;model&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;1&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">                     <span class="attr">&quot;positive&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;4&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;negative&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;5&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">                     <span class="attr">&quot;latent_image&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;6&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;8&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;VAEDecode&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;samples&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;7&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;vae&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;3&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;9&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;class_type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SaveImage&quot;</span><span class="punctuation">,</span></span><br><span class="line">         <span class="attr">&quot;inputs&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;filename_prefix&quot;</span><span class="punctuation">:</span> <span class="string">&quot;anima/batch01&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;8&quot;</span><span class="punctuation">,</span> <span class="number">0</span><span class="punctuation">]</span> <span class="punctuation">&#125;</span> <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>两个 CLIPTextEncode 都从同一个 CLIPLoader 出来（<code>[&quot;2&quot;, 0]</code>），这点和 SDXL 工作流一样。KSampler 吃正向反向两条线加一个空 latent，出来丢给 VAEDecode 再接 SaveImage。</p>
+<h2 id="五、参数"><a href="#五、参数" class="headerlink" title="五、参数"></a>五、参数</h2><p>本机固定的这一组：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>分辨率</td>
+<td>1024×1344</td>
+<td>竖构图，接近 3:4</td>
+</tr>
+<tr>
+<td>batch_size</td>
+<td>2</td>
+<td>一次两张，便于对比 seed</td>
+</tr>
+<tr>
+<td>steps</td>
+<td>32</td>
+<td>官方区间 30–50</td>
+</tr>
+<tr>
+<td>cfg</td>
+<td>4.5</td>
+<td>官方区间 4–5</td>
+</tr>
+<tr>
+<td>sampler</td>
+<td>er_sde</td>
+<td>中性平涂，默认选择</td>
+</tr>
+<tr>
+<td>scheduler</td>
+<td>simple</td>
+<td>够用</td>
+</tr>
+<tr>
+<td>denoise</td>
+<td>1.0</td>
+<td>文生图必须 1.0</td>
+</tr>
+</tbody></table>
+<p>几个值得说的地方：</p>
+<p><strong>CFG 只有 4.5。</strong> 从 SDXL 迁过来的人第一反应会觉得太低——SDXL 常规是 7。但 Anima 的文本编码器是 Qwen3-0.6B，语义理解强度比 CLIP-L 高一个量级，不需要靠高 CFG 硬拉提示词权重。CFG 往上推到 6 以上，画面会开始过饱和、边缘发硬，典型的”用力过猛”。</p>
+<p><strong>分辨率上限 1536。</strong> 官方给的区间是 512²–1536²。超过 1536 之后不是崩，而是开始出现重复构图——同一张图里出现两个一样的局部，或者脸部结构塌陷。竖图 1024×1344 是这套模型比较舒服的一个点。</p>
+<p><strong>batch_size 用 2 而不是 1。</strong> 不是为了省时间，是为了对比：同一组提示词、同一轮里出两张不同 seed 的图，哪张好一眼就能看出来。批量跑的时候这个习惯很有用。</p>
+<h2 id="六、采样器和调度器怎么选"><a href="#六、采样器和调度器怎么选" class="headerlink" title="六、采样器和调度器怎么选"></a>六、采样器和调度器怎么选</h2><p>ComfyUI 里能选的采样器一大堆，针对 Anima 实际有意义的就四个：</p>
+<ul>
+<li><strong><code>er_sde</code></strong>：中性平涂，线条干净、颜色不飘，是默认值，也是绝大多数情况下的正确选择</li>
+<li><strong><code>euler_ancestral</code></strong>：线条更柔，画面更”呼吸”，适合要氛围感的场景</li>
+<li><strong><code>dpmpp_2m_sde_gpu</code></strong>：最”有想法”的一个，构图和光影经常给你惊喜，但也经常跑偏——适合探索，不适合定稿</li>
+<li><strong><code>euler</code></strong>：最稳的一个，配 Turbo &#x2F; Aesthetic 版本时用</li>
+</ul>
+<p>有个容易踩的坑：<strong>ComfyUI 里没有 <code>euler_a</code></strong>。网上很多 SD 的教程写 <code>euler_a</code>，在这里找不到，对应的是 <code>euler_ancestral</code>，全名。直接照抄会得到”节点参数不合法”的报错。</p>
+<p>调度器这边 <code>simple</code> 就够，追求绘画质感可以上 <strong><code>beta57</code></strong>——但它来自 RES4LYF 节点包，得先装那个自定义节点，不是内置的。</p>
+<h2 id="七、提示词怎么写"><a href="#七、提示词怎么写" class="headerlink" title="七、提示词怎么写"></a>七、提示词怎么写</h2><p>Anima 的提示词结构和 SD 系有一定差别，尤其是权重和流派标签的处理。</p>
+<p><strong>顺序</strong>大致是：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">[质量/元信息/年份/安全标签] [1girl/1boy] [角色] [作品系列] [画师] [通用标签]</span><br></pre></td></tr></table></figure>
+
+<p><strong>标签格式</strong>：</p>
+<ul>
+<li>统一小写</li>
+<li>空格代替下划线（<code>long hair</code> 而不是 <code>long_hair</code>）</li>
+<li>唯一保留双下划线命名的是 <code>score_*</code> 系列</li>
+<li>画师必须带 <code>@</code> 前缀，写成 <code>@artist_name</code></li>
+</ul>
+<p><strong>Aesthetic 版不要用 <code>score_*</code>。</strong> 正向反向都别写。这版模型已经把质量分内化了，再塞 <code>score_9, score_8_up</code> 之类的标签反而会干扰。这是 Base 版和 Aesthetic 版在提示词上最大的区别。</p>
+<p><strong>权重要比 SDXL 给得更大。</strong> SDXL 里 <code>(chibi:1.2)</code> 已经很重了，这里得 <code>(chibi:2)</code> 才有同样的效果。原因是 DiT 的注意力分布和 UNet 不一样，弱权重基本被忽略。这是实际调参时最需要重新建立直觉的一点。</p>
+<p><strong>标签和自然语言可以混写。</strong> Qwen3 编码器的理解力是这套模型最大的亮点——你可以直接写英文句子描述场景，不用非得翻译成 booru 标签。纯自然语言的话至少写两句，一句话信息量太少反而会让模型自由发挥。</p>
+<p>一段中性示例：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">a quiet rooftop at dusk, wet asphalt reflecting distant neon signs,</span><br><span class="line">cinematic rim light, (wide shot:1.3), volumetric fog, muted color palette</span><br></pre></td></tr></table></figure>
+
+<h2 id="八、把单张变成批量流水线"><a href="#八、把单张变成批量流水线" class="headerlink" title="八、把单张变成批量流水线"></a>八、把单张变成批量流水线</h2><p>ComfyUI 的 Web 界面适合调参，不适合量产。真正跑起来是靠 API + 一个 Node 脚本。</p>
+<h3 id="5-个够用的端点"><a href="#5-个够用的端点" class="headerlink" title="5 个够用的端点"></a>5 个够用的端点</h3><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET</code></td>
+<td><code>/system_stats</code></td>
+<td>探活，看服务在不在</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/prompt</code></td>
+<td>提交任务，body 里放 <code>prompt</code>（整张节点图）+ <code>client_id</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/history/{prompt_id}</code></td>
+<td>查结果，从 <code>outputs[].images</code> 取文件名</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/queue</code></td>
+<td>看 <code>queue_running</code> &#x2F; <code>queue_pending</code></td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/interrupt</code></td>
+<td>中断当前正在跑的那张</td>
+</tr>
+</tbody></table>
+<p><code>POST /prompt</code> 提交的就是上面那段 JSON——同一份工作流，脚本里当字符串模板用，每次替换 seed 和提示词就行。返回一个 <code>prompt_id</code>，之后拿它去 <code>/history</code> 轮询。</p>
+<h3 id="循环逻辑"><a href="#循环逻辑" class="headerlink" title="循环逻辑"></a>循环逻辑</h3><p>脚本（<code>generate_roccia_cg.cjs</code>）干的事其实很朴素：</p>
+<ol>
+<li>启动时解析桌面的 markdown 提示词包，全部读进内存</li>
+<li>逐条 <code>POST /prompt</code>，每 5 秒轮询一次 <code>/history/{id}</code></li>
+<li>出图后往 <code>roccia_cg.log</code> 追加一行记录</li>
+<li>一轮跑完换一批随机 seed，从头再来，无限循环</li>
+<li><code>/system_stats</code> 探不通就每 30 秒重试，不崩</li>
+</ol>
+<p>第 1 步和第 4 步之间有个隐性的约束：<strong>提示词只在启动时解析一次</strong>。改了 markdown 文件不重启进程，新词不会生效——脚本还按内存里那份旧的跑，日志看起来一切正常，图就是不对。这个坑我踩过一次，排查了半天才发现是缓存。</p>
+<h3 id="提示词包格式"><a href="#提示词包格式" class="headerlink" title="提示词包格式"></a>提示词包格式</h3><p>用 markdown 组织，块之间用 <code>---</code> 分隔：</p>
+<figure class="highlight markdown"><table><tr><td class="code"><pre><span class="line"><span class="section">## 01 rooftop<span class="emphasis">_night</span></span></span><br><span class="line"><span class="emphasis"><span class="section"></span></span></span><br><span class="line"><span class="emphasis"><span class="section"><span class="strong">**环境**</span>：黄昏的楼顶，远处霓虹，薄雾</span></span></span><br><span class="line"><span class="emphasis"><span class="section"></span></span></span><br><span class="line"><span class="emphasis"><span class="section"><span class="strong">**服装**</span>：深色外套</span></span></span><br><span class="line"><span class="emphasis"><span class="section"></span></span></span><br><span class="line"><span class="emphasis"><span class="section"><span class="strong">**正向**</span></span></span></span><br><span class="line"><span class="emphasis"><span class="section">```</span></span></span><br><span class="line"><span class="emphasis"><span class="section">a quiet rooftop at dusk, wet asphalt, neon reflections,</span></span></span><br><span class="line"><span class="emphasis"><span class="section">(wide shot:1.3), volumetric fog</span></span></span><br><span class="line"><span class="emphasis"><span class="section">```</span></span></span><br><span class="line"><span class="emphasis"><span class="section"></span></span></span><br><span class="line"><span class="emphasis"><span class="section"><span class="strong">**反向**</span></span></span></span><br><span class="line"><span class="emphasis"><span class="section">```</span></span></span><br><span class="line"><span class="emphasis"><span class="section">blurry, lowres, extra person, watermark, text</span></span></span><br><span class="line"><span class="emphasis"><span class="section">```</span></span></span><br><span class="line"><span class="emphasis"><span class="section"></span></span></span><br><span class="line"><span class="emphasis"><span class="section"><span class="strong">**参数**</span></span></span></span><br><span class="line"><span class="emphasis"><span class="section">```</span></span></span><br><span class="line"><span class="emphasis"><span class="section">model: anima-aesthetic-v1.1</span></span></span><br><span class="line"><span class="emphasis"><span class="section">clip: qwen_</span>3<span class="emphasis">_06b_</span>base</span></span><br><span class="line">vae: qwen<span class="emphasis">_image_</span>vae</span><br><span class="line">size: 1024x1344</span><br><span class="line">sampler: er<span class="emphasis">_sde / simple / 32 / 4.5</span></span><br><span class="line"><span class="emphasis">```</span></span><br></pre></td></tr></table></figure>
+
+<p>好处是提示词和代码彻底解耦——加一批新场景只要写个 md 文件，不用改脚本。</p>
+<h3 id="两个运维细节"><a href="#两个运维细节" class="headerlink" title="两个运维细节"></a>两个运维细节</h3><p><strong>别多开。</strong> 这种”无限循环”的脚本很容易在自己没注意的时候跑了两份，两边的任务同时往队列里塞，出一堆重复图。跑之前先 <code>tasklist</code> 看一眼。</p>
+<p><strong><code>/interrupt</code> 只中断当前那张，不清队列。</strong> 想整体停下来，中断之后还得把队列里排着的任务清掉，否则它会接着跑下一张。</p>
+<h2 id="九、调参经验"><a href="#九、调参经验" class="headerlink" title="九、调参经验"></a>九、调参经验</h2><p>跑了几十批之后攒下来的一些结论，都是”改了之后肉眼可见”的那种：</p>
+<p><strong>人物占画面比例靠取景标签控制。</strong> <code>cowboy shot</code>（七分身）、<code>upper body</code>（半身）、<code>close-up</code>（特写）加权重就能拉。这是比调分辨率有效得多的手段。</p>
+<p><strong>背景喧宾夺主的时候，是给背景降权而不是删标签。</strong> 把 <code>(detailed background:0.7)</code> 加上，场景标签从 4 条压到 2 条，光照标签从 4 条减到 2–3 条，人物立刻就”凸”出来了。直接删掉场景标签会让背景变成一片死白，更难看。</p>
+<p><strong>单人要写死。</strong> <code>(solo:1.9)</code> 加上加权负向（<code>extra person</code> &#x2F; <code>background person</code> &#x2F; <code>distant figure</code> &#x2F; <code>silhouette</code>）才能压住背景里冒出来的人影。只写 <code>solo</code> 不加重，权重基本被稀释掉了。</p>
+<p><strong>光影是叠出来的。</strong> 想要那种丁达尔光柱的效果，单写一个 <code>god rays</code> 没用，得一整套：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">cinematic lighting:1.28, rim light:1.28, volumetric lighting:1.18,</span><br><span class="line">bloom:1.12, god rays:1.1, atmospheric perspective:1.1, color grading:1.12</span><br></pre></td></tr></table></figure>
+
+<p><strong>机位别全用一种。</strong> <code>from below:1.2</code>、<code>from above:1.2</code> 配 <code>fisheye:1.08</code>、<code>perspective distortion:1.05</code> 能让一批图看起来不像复制粘贴。但这类特殊机位控制在全部提示词的 20% 以内——超过这个比例，整批图会显得很”浮”，反而没有稳定的基准视角。</p>
+<p><strong>同名标签会去重，权重会丢。</strong> 提示词里同一个标签出现两次，保留的是第一次的那个，后面的权重直接作废。所以调权重的时候改第一个出现的位置。</p>
+<h2 id="十、踩坑清单"><a href="#十、踩坑清单" class="headerlink" title="十、踩坑清单"></a>十、踩坑清单</h2><p>一次记清楚，省得下次再查：</p>
+<ol>
+<li><strong><code>CLIPLoader</code> 的 type 选 <code>stable_diffusion</code></strong>，别找 qwen 选项</li>
+<li><strong>没有 <code>euler_a</code></strong>，是 <code>euler_ancestral</code></li>
+<li><strong>Aesthetic 版别写 <code>score_*</code></strong>，正负向都别写</li>
+<li><strong>权重要给大</strong>，SDXL 的 1.2 在这里等于没写</li>
+<li><strong>改提示词必须重启脚本</strong>，它是启动时一次性解析的</li>
+<li><strong>别多开循环进程</strong>，会重复提交任务</li>
+<li><strong><code>/interrupt</code> 不清队列</strong>，停完记得清</li>
+<li><strong>分辨率别超 1536</strong>，会出现重复构图</li>
+<li><strong>CFG 别超 6</strong>，过饱和、边缘发硬</li>
+<li><strong>三件套必须配套</strong>，换一个就得换全套</li>
+</ol>
+<hr>
+<p>这套东西跑顺之后，出一批图基本是”写 md → 起脚本 → 去看日志”三步，不需要盯着界面。ComfyUI 的 API 设计得比想象中干净，<code>/prompt</code> 吃 JSON、<code>/history</code> 吐文件名，中间没有多余的状态——比起很多生成式框架的 SDK，反而更适合直接拿 HTTP 拼流水线。</p>
+<p>下一篇大概会写写这批图的筛选和二次处理流程，那是另一套麻烦事。</p>
+</div>
+  
+    <nav class="post-nav">
+      
+      <a class="next" href="/2026/10/23/about%20Agent/">Agent杂谈 →</a>
+    </nav>
+  
+</article>
+
+  </main>
+
+  <footer class="site-footer">
+    <a href="https://icp.gov.moe/?keyword=20260549" target="_blank" rel="noopener noreferrer">萌ICP备20260549号</a>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      var themeFadeTimer = 0;
+
+      function render() {
+        btn.textContent = root.getAttribute('data-theme') === 'dark' ? 'LIGHT_MODE' : 'DARK_MODE';
+      }
+
+      render();
+
+      btn.addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        var wantsMotion = !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (wantsMotion) {
+          root.classList.add('theme-fading');
+          window.clearTimeout(themeFadeTimer);
+          themeFadeTimer = window.setTimeout(function () {
+            root.classList.remove('theme-fading');
+          }, 400);
+        }
+
+        root.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem('lofi-theme', next);
+        } catch (e) {}
+        render();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var bar = document.querySelector('.list-bar');
+      var input = document.getElementById('search-input');
+      var panel = document.getElementById('search-results');
+      if (!bar || !input || !panel) return;
+
+      var indexUrl = bar.getAttribute('data-search-index');
+      var indexData = null;
+      var pending = null;
+      var timer = null;
+      var activeIndex = -1;
+
+      function decodeText(value) {
+        var holder = document.createElement('textarea');
+        holder.innerHTML = value == null ? '' : String(value);
+        return holder.value;
+      }
+
+      function loadIndex() {
+        if (indexData) return Promise.resolve(indexData);
+        if (pending) return pending;
+        pending = fetch(indexUrl)
+          .then(function (response) {
+            return response.ok ? response.json() : [];
+          })
+          .then(function (list) {
+            indexData = (list || []).map(function (item) {
+              return {
+                title: decodeText(item.title),
+                url: item.url,
+                content: decodeText(item.content).replace(/\s+/g, ' ')
+              };
+            });
+            return indexData;
+          })
+          .catch(function () {
+            indexData = [];
+            return indexData;
+          });
+        return pending;
+      }
+
+      function snippetOf(item, keyword) {
+        var text = item.content;
+        var pos = text.toLowerCase().indexOf(keyword);
+        if (pos < 0) return text.slice(0, 60);
+        var start = Math.max(0, pos - 18);
+        var head = start > 0 ? '…' : '';
+        var tail = start + 66 < text.length ? '…' : '';
+        return head + text.slice(start, start + 66) + tail;
+      }
+
+      function closePanel() {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        activeIndex = -1;
+      }
+
+      function renderResults(hits, keyword) {
+        panel.hidden = false;
+        panel.innerHTML = '';
+        activeIndex = -1;
+
+        if (!hits.length) {
+          var empty = document.createElement('p');
+          empty.className = 'search-empty';
+          empty.textContent = '没有找到匹配的文章';
+          panel.appendChild(empty);
+          return;
+        }
+
+        hits.slice(0, 8).forEach(function (item) {
+          var link = document.createElement('a');
+          link.className = 'search-item';
+          link.href = item.url;
+
+          var title = document.createElement('span');
+          title.className = 'search-item-title';
+          title.textContent = item.title;
+
+          var snippet = document.createElement('span');
+          snippet.className = 'search-item-snippet';
+          snippet.textContent = snippetOf(item, keyword);
+
+          link.appendChild(title);
+          link.appendChild(snippet);
+          panel.appendChild(link);
+        });
+      }
+
+      function runSearch() {
+        var keyword = input.value.trim().toLowerCase();
+        if (!keyword) {
+          closePanel();
+          return;
+        }
+        loadIndex().then(function (list) {
+          if (input.value.trim().toLowerCase() !== keyword) return;
+          var hits = list.filter(function (item) {
+            return item.title.toLowerCase().indexOf(keyword) >= 0 ||
+              item.content.toLowerCase().indexOf(keyword) >= 0;
+          });
+          renderResults(hits, keyword);
+        });
+      }
+
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(runSearch, 180);
+      });
+
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          input.value = '';
+          closePanel();
+          return;
+        }
+
+        var items = panel.hidden ? [] : Array.prototype.slice.call(panel.querySelectorAll('.search-item'));
+        if (!items.length) return;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          activeIndex = event.key === 'ArrowDown'
+            ? (activeIndex + 1) % items.length
+            : (activeIndex - 1 + items.length) % items.length;
+          items.forEach(function (el, i) {
+            el.classList.toggle('is-active', i === activeIndex);
+          });
+        } else if (event.key === 'Enter') {
+          var target = items[activeIndex >= 0 ? activeIndex : 0];
+          if (target) {
+            event.preventDefault();
+            window.location.href = target.getAttribute('href');
+          }
+        }
+      });
+
+      input.addEventListener('focus', function () {
+        if (input.value.trim()) runSearch();
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!bar.contains(event.target)) closePanel();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sortBtn = document.getElementById('sort-toggle');
+      var list = document.querySelector('.post-list');
+      if (!sortBtn || !list) return;
+
+      var labels = { desc: '时间倒序 ↓', asc: '时间正序 ↑' };
+      var currentOrder = 'desc';
+      var FLIP_MS = 420;
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function timestampOf(item) {
+        var time = item.querySelector('time[datetime]');
+        var value = time ? Date.parse(time.getAttribute('datetime')) : NaN;
+        return isNaN(value) ? 0 : value;
+      }
+
+      function apply(order, animate) {
+        var items = Array.prototype.slice.call(list.children);
+        var previousTop = new Map();
+
+        if (animate && !reducedMotion) {
+          items.forEach(function (item) {
+            previousTop.set(item, item.getBoundingClientRect().top);
+          });
+        }
+
+        var sorted = items.slice().sort(function (a, b) {
+          return order === 'asc' ? timestampOf(a) - timestampOf(b) : timestampOf(b) - timestampOf(a);
+        });
+
+        sorted.forEach(function (item) {
+          list.appendChild(item);
+        });
+
+        currentOrder = order;
+        sortBtn.textContent = labels[order];
+
+        if (!previousTop.size) return;
+
+        sorted.forEach(function (item) {
+          var before = previousTop.get(item);
+          if (before === undefined) return;
+
+          var delta = before - item.getBoundingClientRect().top;
+          if (!delta) return;
+
+          item.style.transition = 'none';
+          item.style.transform = 'translateY(' + delta + 'px)';
+          void item.offsetHeight;
+          item.style.transition = 'transform ' + FLIP_MS + 'ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+          item.style.transform = 'translateY(0)';
+
+          window.setTimeout(function () {
+            item.style.transition = '';
+            item.style.transform = '';
+          }, FLIP_MS + 60);
+        });
+      }
+
+      var savedOrder = 'desc';
+      try {
+        savedOrder = localStorage.getItem('lofi-sort') === 'asc' ? 'asc' : 'desc';
+      } catch (e) {}
+      apply(savedOrder, false);
+
+      sortBtn.addEventListener('click', function () {
+        var next = currentOrder === 'asc' ? 'desc' : 'asc';
+        apply(next, true);
+        try {
+          localStorage.setItem('lofi-sort', next);
+        } catch (e) {}
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sprites = ["/images/91/thumb/1.png","/images/91/thumb/2.png","/images/91/thumb/3.png","/images/91/thumb/4.png"];
+      var matterUrl = '/js/matter.min.js';
+      var btn = document.getElementById('theme-toggle');
+      if (!btn || !sprites.length) return;
+
+      var CLICK_WINDOW = 2000;
+      var CLICK_NEEDED = 6;
+      var RAIN_MS = 10000;
+      var SPAWN_INTERVAL = 110;
+      var START_OFFSET = 60;
+      var MIN_WIDTH = 40;
+      var MAX_WIDTH = 110;
+      var TIME_SCALE = 0.5;
+      var STEP_MS = 16.666;
+      var REMOVE_MARGIN = 220;
+      var SPRING_STIFFNESS = 0.3;
+      var SPRING_DAMPING = 0.1;
+      var MAX_SQUEEZE = 0.25;
+
+      var clicks = [];
+      var running = false;
+      var engine = null;
+      var bodyItemMap = new Map();
+      var floorBody = null;
+      var sideWalls = [];
+      var layer = null;
+      var items = [];
+      var lastSpawn = 0;
+      var startedAt = 0;
+      var rafId = 0;
+      var matterReady = null;
+      var preloaded = false;
+
+      var spritesLoaded = sprites.map(function (src) {
+        var image = new Image();
+        image.src = src;
+        return image;
+      });
+
+      function viewport() {
+        return { w: window.innerWidth, h: window.innerHeight };
+      }
+
+      function loadMatter() {
+        if (window.Matter) return Promise.resolve(window.Matter);
+        if (matterReady) return matterReady;
+
+        matterReady = new Promise(function (resolve, reject) {
+          var tag = document.createElement('script');
+          tag.src = matterUrl;
+          tag.async = true;
+          tag.onload = function () {
+            resolve(window.Matter);
+          };
+          tag.onerror = function () {
+            matterReady = null;
+            reject(new Error('matter load failed'));
+          };
+          document.head.appendChild(tag);
+        });
+
+        return matterReady;
+      }
+
+      function warmUp() {
+        if (preloaded) return;
+        preloaded = true;
+        loadMatter().catch(function () {});
+      }
+
+      function buildWorld(Matter) {
+        var vp = viewport();
+        var localEngine = Matter.Engine.create();
+
+        localEngine.gravity.y = 1;
+        localEngine.timing.timeScale = TIME_SCALE;
+
+        var wallOptions = { isStatic: true, friction: 0.4, restitution: 0.1 };
+        var wallHeight = vp.h * 3;
+
+        sideWalls = [
+          Matter.Bodies.rectangle(-40, vp.h / 2, 80, wallHeight, wallOptions),
+          Matter.Bodies.rectangle(vp.w + 40, vp.h / 2, 80, wallHeight, wallOptions)
+        ];
+        floorBody = Matter.Bodies.rectangle(vp.w / 2, vp.h + 40, vp.w * 4, 80, wallOptions);
+
+        Matter.Composite.add(localEngine.world, sideWalls.concat([floorBody]));
+        return localEngine;
+      }
+
+      function sync(item) {
+        var body = item.body;
+        var left = body.position.x - item.w / 2;
+        var top = body.position.y - item.h / 2;
+        item.el.style.transform =
+          'translate3d(' + left + 'px,' + top + 'px,0) rotate(' + body.angle + 'rad)';
+      }
+
+      function updateDeform(item) {
+        if (!item.deform && !item.deformVel) {
+          if (item.scaleX !== 1 || item.scaleY !== 1) {
+            item.sprite.style.transform = '';
+            item.scaleX = 1;
+            item.scaleY = 1;
+          }
+          return;
+        }
+
+        item.deformVel += -SPRING_STIFFNESS * item.deform - SPRING_DAMPING * item.deformVel;
+        item.deform += item.deformVel;
+
+        if (Math.abs(item.deform) < 0.002 && Math.abs(item.deformVel) < 0.002) {
+          item.deform = 0;
+          item.deformVel = 0;
+        }
+
+        var scaleX = 1 - item.deform * item.deformAx;
+        var scaleY = 1 - item.deform * item.deformAy;
+
+        if (Math.abs(scaleX - item.scaleX) > 0.002 || Math.abs(scaleY - item.scaleY) > 0.002) {
+          item.scaleX = scaleX;
+          item.scaleY = scaleY;
+          item.sprite.style.transform =
+            'scale(' + scaleX.toFixed(3) + ',' + scaleY.toFixed(3) + ')';
+        }
+      }
+
+      function squeezeBody(body, normal, impact) {
+        var item = bodyItemMap.get(body.id);
+        if (!item) return;
+
+        var localAngle = Math.atan2(normal.y, normal.x) - body.angle;
+        item.deformAx = Math.abs(Math.cos(localAngle));
+        item.deformAy = Math.abs(Math.sin(localAngle));
+        item.deform = Math.max(item.deform, impact);
+        item.deformVel = 0;
+      }
+
+      function bindCollisions(Matter) {
+        Matter.Events.on(engine, 'collisionStart', function (event) {
+          var pairs = event.pairs;
+
+          for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i];
+            var velocityA = pair.bodyA.velocity;
+            var velocityB = pair.bodyB.velocity;
+            var dx = velocityA.x - velocityB.x;
+            var dy = velocityA.y - velocityB.y;
+            var impact = Math.min(MAX_SQUEEZE, Math.sqrt(dx * dx + dy * dy) * 0.07);
+
+            if (impact < 0.03) continue;
+
+            var normal = pair.collision.normal;
+            squeezeBody(pair.bodyA, normal, impact);
+            squeezeBody(pair.bodyB, normal, impact);
+          }
+        });
+      }
+
+      function spawn(Matter) {
+        var sprite = spritesLoaded[Math.floor(Math.random() * spritesLoaded.length)];
+        var width = MIN_WIDTH + Math.random() * (MAX_WIDTH - MIN_WIDTH);
+        var ratio = sprite.naturalWidth ? sprite.naturalHeight / sprite.naturalWidth : 1.3;
+        var height = width * ratio;
+        var vp = viewport();
+
+        var el = document.createElement('div');
+        el.className = 'egg-item';
+        el.style.width = width + 'px';
+        el.style.height = height + 'px';
+
+        var spriteEl = document.createElement('img');
+        spriteEl.className = 'egg-sprite';
+        spriteEl.src = sprite.src;
+        spriteEl.alt = '';
+        el.appendChild(spriteEl);
+        layer.appendChild(el);
+
+        var body = Matter.Bodies.rectangle(
+          width / 2 + Math.random() * Math.max(0, vp.w - width),
+          -height - START_OFFSET - Math.random() * 90,
+          width,
+          height,
+          {
+            restitution: 0.6,
+            friction: 0.3,
+            frictionStatic: 0.6,
+            frictionAir: 0.006,
+            density: 0.0012,
+            slop: 0.02
+          }
+        );
+
+        Matter.Body.setAngle(body, (Math.random() - 0.5) * 0.7);
+        Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+        Matter.Composite.add(engine.world, body);
+
+        var item = {
+          el: el,
+          sprite: spriteEl,
+          body: body,
+          w: width,
+          h: height,
+          deform: 0,
+          deformVel: 0,
+          deformAx: 1,
+          deformAy: 0,
+          scaleX: 1,
+          scaleY: 1
+        };
+
+        bodyItemMap.set(body.id, item);
+        sync(item);
+        items.push(item);
+      }
+
+      function removeItem(item) {
+        if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
+        if (engine) Matter.Composite.remove(engine.world, item.body);
+        bodyItemMap.delete(item.body.id);
+      }
+
+      function step(now) {
+        var Matter = window.Matter;
+        var vp = viewport();
+        var elapsed = now - startedAt;
+
+        if (elapsed < RAIN_MS) {
+          if (now - lastSpawn >= SPAWN_INTERVAL) {
+            lastSpawn = now;
+            spawn(Matter);
+          }
+        } else if (floorBody) {
+          Matter.Composite.remove(engine.world, floorBody);
+          floorBody = null;
+        }
+
+        Matter.Engine.update(engine, STEP_MS);
+
+        for (var i = items.length - 1; i >= 0; i--) {
+          var item = items[i];
+          updateDeform(item);
+          sync(item);
+
+          if (item.body.position.y - item.h / 2 > vp.h + REMOVE_MARGIN) {
+            removeItem(item);
+            items.splice(i, 1);
+          }
+        }
+
+        if (!floorBody && !items.length) {
+          stop();
+          return;
+        }
+
+        rafId = requestAnimationFrame(step);
+      }
+
+      function stop() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+
+        items = [];
+        floorBody = null;
+        sideWalls = [];
+        bodyItemMap.clear();
+
+        if (engine && window.Matter) {
+          window.Matter.Engine.clear(engine);
+        }
+        engine = null;
+
+        if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
+        layer = null;
+        running = false;
+      }
+
+      function start() {
+        if (running) return;
+
+        loadMatter()
+          .then(function (Matter) {
+            if (!Matter || running) return;
+
+            running = true;
+            items = [];
+            lastSpawn = 0;
+            startedAt = performance.now();
+
+            layer = document.createElement('div');
+            layer.className = 'egg-layer';
+            layer.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(layer);
+
+            engine = buildWorld(Matter);
+            bindCollisions(Matter);
+            rafId = requestAnimationFrame(step);
+          })
+          .catch(function () {});
+      }
+
+      btn.addEventListener('click', function () {
+        warmUp();
+
+        var now = Date.now();
+        clicks = clicks.filter(function (stamp) {
+          return now - stamp < CLICK_WINDOW;
+        });
+        clicks.push(now);
+
+        if (running || clicks.length < CLICK_NEEDED) return;
+        clicks = [];
+        start();
+      });
+
+      window.addEventListener('resize', function () {
+        if (!running || !window.Matter) return;
+
+        var vp = viewport();
+
+        if (sideWalls.length === 2) {
+          window.Matter.Body.setPosition(sideWalls[0], { x: -40, y: vp.h / 2 });
+          window.Matter.Body.setPosition(sideWalls[1], { x: vp.w + 40, y: vp.h / 2 });
+        }
+        if (floorBody) {
+          window.Matter.Body.setPosition(floorBody, { x: vp.w / 2, y: vp.h + 40 });
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var body = document.body;
+      var HOME_URL = '/';
+      var ABOUT_URL = '/about/';
+      var ORDER = [HOME_URL, ABOUT_URL];
+      var NAV_KEY = 'lofi-nav';
+      var POST_KEY = 'lofi-post-rect';
+      var LEAVE_MS = 200;
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var busy = false;
+
+      function pageIndex() {
+        var path = window.location.pathname;
+        for (var i = 0; i < ORDER.length; i++) {
+          if (path === ORDER[i]) return i;
+        }
+        return -1;
+      }
+
+      function navigate(url, direction) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        try {
+          sessionStorage.setItem(NAV_KEY, direction);
+        } catch (e) {}
+
+        body.classList.add('nav-leave-' + direction);
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, LEAVE_MS);
+      }
+
+      /*
+        打开文章：把卡片的屏幕位置和尺寸交给下一个页面，
+        由那边用一个同样的矩形扩展成整页，形成"卡片长成页面"的连续感。
+      */
+      function navigatePost(url, card) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        var rect = card.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+
+        try {
+          sessionStorage.setItem(POST_KEY, '1');
+        } catch (e) {}
+
+        var expander = document.createElement('div');
+        expander.className = 'card-expander';
+        expander.style.transform =
+          'translate(' + rect.left + 'px,' + rect.top + 'px) scale(' +
+          rect.width / vw + ',' + rect.height / vh + ')';
+        document.body.appendChild(expander);
+
+        void expander.offsetWidth;
+
+        expander.style.transition = 'transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+        expander.style.transform = 'translate(0,0) scale(1,1)';
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, 430);
+      }
+
+      function goForward() {
+        var index = pageIndex();
+        if (index < 0 || index + 1 >= ORDER.length) return;
+        navigate(ORDER[index + 1], 'forward');
+      }
+
+      function goBack() {
+        var index = pageIndex();
+        if (index < 0) {
+          navigate(HOME_URL, 'back');
+          return;
+        }
+        if (index <= 0) return;
+        navigate(ORDER[index - 1], 'back');
+      }
+
+      /* 左右滑动切换页面 */
+      var startX = 0;
+      var startY = 0;
+      var tracking = false;
+
+      document.addEventListener('touchstart', function (event) {
+        if (event.touches.length !== 1) {
+          tracking = false;
+          return;
+        }
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        tracking = true;
+      }, { passive: true });
+
+      document.addEventListener('touchend', function (event) {
+        if (!tracking) return;
+        tracking = false;
+
+        var touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+
+        if (Math.abs(dx) < 70) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+        if (dx < 0) goForward();
+        else goBack();
+      }, { passive: true });
+
+      /* 键盘左右方向键，桌面端也能翻页 */
+      document.addEventListener('keydown', function (event) {
+        var tag = (event.target && event.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (event.key === 'ArrowRight') goForward();
+        else if (event.key === 'ArrowLeft') goBack();
+      });
+
+      /* 站内链接：先播离场动画，再跳转 */
+      document.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        var link = event.target && event.target.closest ? event.target.closest('a') : null;
+        if (!link) return;
+
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) !== '/') return;
+        if (link.target && link.target !== '_self') return;
+
+        var url;
+        try {
+          url = new URL(link.href, window.location.href);
+        } catch (e) {
+          return;
+        }
+        if (url.origin !== window.location.origin) return;
+        if (url.pathname === window.location.pathname) return;
+
+        event.preventDefault();
+
+        var card = link.closest('.post-card');
+        if (card) {
+          navigatePost(url.pathname, card);
+          return;
+        }
+
+        var targetIndex = ORDER.indexOf(url.pathname);
+        var currentIndex = pageIndex();
+        var direction =
+          targetIndex >= 0 && currentIndex >= 0 && targetIndex < currentIndex ? 'back' : 'forward';
+        navigate(url.pathname, direction);
+      });
+
+      /* 文章卡片滚动进入视口时依次归位 */
+      var cards = document.querySelectorAll('.post-card');
+      if (cards.length) {
+        if ('IntersectionObserver' in window && !reduced) {
+          var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              var card = entry.target;
+              card.style.transitionDelay = (card.dataset.animIndex || 0) * 60 + 'ms';
+              card.classList.add('is-in');
+              observer.unobserve(card);
+            });
+          }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+          Array.prototype.forEach.call(cards, function (card, index) {
+            card.dataset.animIndex = index % 6;
+            observer.observe(card);
+          });
+        } else {
+          Array.prototype.forEach.call(cards, function (card) {
+            card.classList.add('is-in');
+          });
+        }
+      }
+    })();
+  </script>
+
+  <script>
+    (function () {
+      /* 固定"每秒还原多少字"，长度不同的内容自动得到不同的总时长，手感才一致 */
+      var SPEED = 80;
+      var MIN_DURATION = 400;
+      var POST_DELAY = 300;
+      var CHARS =
+        '的一是了我不人在他有这个上们来到时大地为子中你说生国年着就那和要她出也得里后自以会家可下而过天去能对小多然于心学么之都好看起发当没成只如事把还用第样道想作种开美总从无情己面最女但现前些所同日手又行意动方期它头经长儿回位分爱老因很给名法间斯知世什两次使身者被高已亲其进此话常与活正感';
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (noMotion || !document.createTreeWalker) return;
+
+      var pool = '';
+
+      function randomChars(length) {
+        var out = '';
+        for (var i = 0; i < length; i++) {
+          out += CHARS.charAt(Math.floor(Math.random() * CHARS.length));
+        }
+        return out;
+      }
+
+      function garbles(length) {
+        while (pool.length < length + 64) {
+          pool += randomChars(256);
+        }
+        var offset = Math.floor(Math.random() * (pool.length - length));
+        return pool.substr(offset, length);
+      }
+
+      function collect(root) {
+        var list = [];
+        if (!root) return list;
+
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        var node = walker.nextNode();
+
+        while (node) {
+          var value = node.nodeValue;
+          if (value && value.replace(/\s/g, '').length) {
+            list.push({ node: node, text: value });
+          }
+          node = walker.nextNode();
+        }
+
+        return list;
+      }
+
+      /* 把若干区域的文字拼成一条序列，按进度从左到右、从上到下还原 */
+      function play(roots, delay, onReady) {
+        var entries = [];
+        var total = 0;
+
+        for (var i = 0; i < roots.length; i++) {
+          var found = collect(roots[i]);
+          for (var j = 0; j < found.length; j++) {
+            entries.push({ node: found[j].node, text: found[j].text, start: total, drawn: -1 });
+            total += found[j].text.length;
+          }
+        }
+
+        if (!total) {
+          if (onReady) onReady();
+          return;
+        }
+
+        function draw(revealed) {
+          for (var k = 0; k < entries.length; k++) {
+            var entry = entries[k];
+            var length = entry.text.length;
+            var done = revealed - entry.start;
+
+            if (done < 0) done = 0;
+            else if (done > length) done = length;
+
+            if (done === entry.drawn) continue;
+
+            entry.drawn = done;
+            entry.node.nodeValue =
+              done >= length ? entry.text : entry.text.slice(0, done) + garbles(length - done);
+          }
+        }
+
+        function animate() {
+          var startedAt = 0;
+          var duration = Math.max(MIN_DURATION, (total / SPEED) * 1000);
+
+          function tick(now) {
+            if (!startedAt) startedAt = now;
+
+            var progress = (now - startedAt) / duration;
+            if (progress > 1) progress = 1;
+
+            draw(Math.round(progress * total));
+
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              for (var m = 0; m < entries.length; m++) {
+                entries[m].node.nodeValue = entries[m].text;
+              }
+            }
+          }
+
+          requestAnimationFrame(tick);
+        }
+
+        /* 先整段变成乱码再解除隐藏，保证第一次被看到时就是乱码 */
+        draw(0);
+        if (onReady) onReady();
+
+        if (delay > 0) window.setTimeout(animate, delay);
+        else animate();
+      }
+
+      var postRoots = [];
+      var postTitle = document.querySelector('.post-title');
+      var postContent = document.querySelector('.post-content');
+
+      if (postTitle) postRoots.push(postTitle);
+      if (postContent) postRoots.push(postContent);
+
+      if (postRoots.length) {
+        /* 文章页：立刻变乱码并解除隐藏，等卡片扩展层揭开一点再开始逐字还原 */
+        play(postRoots, POST_DELAY, function () {
+          document.documentElement.classList.remove('decrypt-pending');
+        });
+        return;
+      }
+
+      /* 列表页：卡片进入视口时各自解密 */
+      var cards = document.querySelectorAll('.post-card');
+      if (!cards.length || !('IntersectionObserver' in window)) return;
+
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+
+          var roots = [];
+          var title = entry.target.querySelector('.post-card-title');
+          var excerpt = entry.target.querySelector('.post-card-excerpt');
+
+          if (title) roots.push(title);
+          if (excerpt) roots.push(excerpt);
+
+          play(roots, 0);
+        });
+      }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+      Array.prototype.forEach.call(cards, function (card) {
+        observer.observe(card);
+      });
+    })();
+  </script>
+
+</body>
+</html>
