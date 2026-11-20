@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>同一套模板出两版 CG：莫宁的提示词是怎么拼出来的 | W_zzzz&#39;s blog</title>
+  <meta name="description" content="一个黑白极简的像素风技术博客">
+  <style>
+    /* 关键样式内联：保证首屏绘制之前背景色和过渡动画就已就位，避免闪白或闪一下 */
+    html {
+      background-color: #ffffff;
+    }
+
+    html[data-theme="dark"] {
+      background-color: #000000;
+    }
+
+    /* 打开文章时的"容器扩展"层：从卡片矩形长成整页 */
+    .card-expander {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 300;
+      background-color: #ffffff;
+      border: 2px solid #000000;
+      transform-origin: top left;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    html[data-theme="dark"] .card-expander {
+      background-color: #000000;
+      border-color: #ffffff;
+    }
+
+    #post-expander {
+      display: none;
+    }
+
+    #post-expander.is-active {
+      display: block;
+    }
+
+    /*
+      解密动画就位之前先藏住文章文字，否则会先闪一帧原文再变乱码。
+      末尾的动画是兜底：万一脚本没跑起来，两秒后文字自动显示出来。
+    */
+    html.decrypt-pending .post-title,
+    html.decrypt-pending .post-content {
+      visibility: hidden;
+      animation: lofi-decrypt-reveal 0s linear 2000ms forwards;
+    }
+
+    @keyframes lofi-decrypt-reveal {
+      to {
+        visibility: visible;
+      }
+    }
+
+    /* 页面切换：内容区从侧边滑入 */
+    html.nav-enter-forward .wrap {
+      animation: lofi-enter-right 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    html.nav-enter-back .wrap {
+      animation: lofi-enter-left 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    @keyframes lofi-enter-right {
+      from {
+        opacity: 0;
+        transform: translateX(38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes lofi-enter-left {
+      from {
+        opacity: 0;
+        transform: translateX(-38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+  </style>
+  <script>
+    (function () {
+      var root = document.documentElement;
+
+      try {
+        var saved = localStorage.getItem('lofi-theme');
+        if (saved === 'dark' || saved === 'light') {
+          root.setAttribute('data-theme', saved);
+        }
+
+        root.className += ' js-anim';
+
+        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        var navDirection = sessionStorage.getItem('lofi-nav');
+        if (navDirection) {
+          sessionStorage.removeItem('lofi-nav');
+          if (!reduced) root.className += ' nav-enter-' + navDirection;
+        }
+
+        if (!reduced) root.className += ' decrypt-pending';
+
+      } catch (e) {}
+    })();
+  </script>
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/latin/Fusion-Pixel-12px-Proportional-Latin.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/zh_hans/Fusion-Pixel-12px-Proportional-Simplified-Chinese.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/monospaced-latin/Fusion-Pixel-12px-Monospaced-Latin.css">
+
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <div class="card-expander" id="post-expander" aria-hidden="true"></div>
+  <script>
+    (function () {
+      var expander = document.getElementById('post-expander');
+      var pending = null;
+
+      try {
+        pending = sessionStorage.getItem('lofi-post-rect');
+        sessionStorage.removeItem('lofi-post-rect');
+      } catch (e) {}
+
+      if (!expander) return;
+
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (!pending || noMotion) {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+        return;
+      }
+
+      /*
+        上一页已经把这块矩形放大到铺满整屏了，这里直接接住那个"满屏"状态，
+        再把它揭开露出文章内容，两段动作首尾相接成一次连续转场。
+      */
+      expander.classList.add('is-active');
+
+      requestAnimationFrame(function () {
+        expander.style.transition = 'opacity 420ms ease-out';
+        expander.style.opacity = '0';
+      });
+
+      window.setTimeout(function () {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+      }, 480);
+    })();
+  </script>
+
+  <header class="topbar">
+    <nav class="tabs">
+      <a class="tab active" href="/">我的文章</a>
+      <a class="tab" href="/about/">关于我自己</a>
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="切换深浅色">DARK_MODE</button>
+  </header>
+
+  <main class="wrap">
+    <article class="post">
+  <h1 class="post-title">同一套模板出两版 CG：莫宁的提示词是怎么拼出来的</h1>
+  <time class="post-date" datetime="2026-11-20T18:40:00.000Z">2026-11-21</time>
+  <div class="post-content"><p><img src="/images/mornye/rain-alley.jpg" alt="雨巷"></p>
+<p>上一篇写的是 ComfyUI + Anima 的管线，这篇往下一层，讲提示词本身。</p>
+<p>这两张图出自同一套模板、同一个角色、同一组采样参数，只有中间五个字段不一样。之所以能把”换场景”这件事做得这么轻，是因为提示词根本不是手写的——它是一段拼装代码的输出。下面把拼装结构拆开看。</p>
+<span id="more"></span>
+
+<h2 id="先看结果"><a href="#先看结果" class="headerlink" title="先看结果"></a>先看结果</h2><p>两张图并排：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>雨巷</th>
+<th>窗边</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>组别</td>
+<td><code>daily/07-rain-alley</code></td>
+<td><code>daily/05-bedroom-window</code></td>
+</tr>
+<tr>
+<td>环境</td>
+<td>雨、冷光、湿润反射</td>
+<td>卧室、晨光、蕾丝窗帘</td>
+</tr>
+<tr>
+<td>服装</td>
+<td>风衣 + 淡紫毛衣 + 白靴 + 透明伞</td>
+<td>白色睡裙 + 蕾丝边、赤足</td>
+</tr>
+<tr>
+<td>构图</td>
+<td>cowboy shot</td>
+<td>cowboy shot</td>
+</tr>
+<tr>
+<td>机位</td>
+<td>四分之三侧、伞下、安静的笑</td>
+<td>四分之三侧、抱膝坐窗边、困倦的笑</td>
+</tr>
+</tbody></table>
+<p><img src="/images/mornye/bedroom-window.jpg" alt="窗边"></p>
+<p>同一张脸、同一套光影语言，但一张是冷调的湿街，一张是暖调的逆光室内。这种一致性不是靠反复试出来的，是靠结构固定下来的。</p>
+<h2 id="提示词不是写的，是拼的"><a href="#提示词不是写的，是拼的" class="headerlink" title="提示词不是写的，是拼的"></a>提示词不是写的，是拼的</h2><p>目录长这样：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">Mornye_Prompts/</span><br><span class="line">├── _template.md          # 全局模板，改这一份 = 全部组同时生效</span><br><span class="line">├── core/    01..10       # 核心场景</span><br><span class="line">├── daily/   01..10       # 日常</span><br><span class="line">├── school/  01..10       # 制服</span><br><span class="line">├── special/ 01..10       # 特殊构图</span><br><span class="line">└── swim/    01..10       # 泳装</span><br></pre></td></tr></table></figure>
+
+<p>五十组提示词，但真正需要手写的只有每组的五行：</p>
+<figure class="highlight markdown"><table><tr><td class="code"><pre><span class="line"><span class="section"># 07 rain-alley</span></span><br><span class="line"></span><br><span class="line">环境光照: rainy alley, (cool light:1.1), (reflections:1.06)</span><br><span class="line">服装: (trench coat:1.2), lavender sweater, white boots, (clear umbrella:1.15)</span><br><span class="line">构图: (cowboy shot:1.2)</span><br><span class="line">视角: 普通</span><br><span class="line">机位姿态: (three-quarter view:1.15), under the umbrella, looking at viewer, quiet smile</span><br><span class="line">画面句: Under her umbrella in the rainy alley, Mornye gives the viewer a quiet smile.</span><br><span class="line">反向追加: full body, wide shot, distant subject, tiny person</span><br></pre></td></tr></table></figure>
+
+<p>模板那边则是大头：</p>
+<ul>
+<li><strong>HEAD</strong> —— 质量词 + 角色锚定（角色名、作品名、发色瞳色、光环、耳坠这类身份特征）</li>
+<li><strong>SOLO_POSE &#x2F; SOLO_POSE_FULL</strong> —— 单人锁，防止背景冒人</li>
+<li><strong>FACE</strong> —— 只在特写时插进去的面部细化</li>
+<li><strong>STYLE &#x2F; STYLE_FULL</strong> —— 画风栈（光照、材质、色彩）</li>
+<li><strong>TAIL</strong> —— 景深收尾</li>
+<li><strong>NEGATIVE</strong> —— 通用负面词</li>
+</ul>
+<h2 id="拼装顺序"><a href="#拼装顺序" class="headerlink" title="拼装顺序"></a>拼装顺序</h2><p>加载器做的事情很笨，就是把几段字符串按固定顺序 <code>join(&#39;, &#39;)</code>：</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="keyword">const</span> positive = [</span><br><span class="line">  <span class="variable constant_">HEAD</span>,              <span class="comment">// 质量 + 角色</span></span><br><span class="line">  服装,               <span class="comment">// 每组变量</span></span><br><span class="line">  构图,               <span class="comment">// 每组变量</span></span><br><span class="line">  solo,              <span class="comment">// 按构图选 SOLO_POSE 或 SOLO_POSE_FULL</span></span><br><span class="line">  机位姿态,            <span class="comment">// 每组变量</span></span><br><span class="line">  face,              <span class="comment">// 仅 close-up 时非空</span></span><br><span class="line">  环境光照,            <span class="comment">// 每组变量</span></span><br><span class="line">  style,             <span class="comment">// 按构图选 STYLE 或 STYLE_FULL</span></span><br><span class="line">  <span class="variable constant_">TAIL</span></span><br><span class="line">].<span class="title function_">filter</span>(<span class="title class_">Boolean</span>).<span class="title function_">join</span>(<span class="string">&#x27;, &#x27;</span>) + <span class="string">&#x27;. &#x27;</span> + 画面句;</span><br><span class="line"></span><br><span class="line"><span class="keyword">const</span> negative = 反向追加 ? 反向追加 + <span class="string">&#x27;, &#x27;</span> + <span class="variable constant_">NEGATIVE</span> : <span class="variable constant_">NEGATIVE</span>;</span><br></pre></td></tr></table></figure>
+
+<p>注意最后那个 <code>. </code> 加画面句——前面全是标签，最后一句话是英文自然语言。Anima 的文本编码器是 Qwen3，对整句的理解力比标签堆强得多，所以每组都留了一句完整的描述兜底：标签负责”是什么”，句子负责”在干什么、什么情绪”。</p>
+<p>拼出来长约 1050 字符，负面 750 字符。这个长度不算短，但结构是死的，改一组场景只动中间五行。</p>
+<h3 id="三个隐性分支"><a href="#三个隐性分支" class="headerlink" title="三个隐性分支"></a>三个隐性分支</h3><p>拼装里藏了三个条件判断，写模板的时候得心里有数：</p>
+<p><strong>一、构图决定 STYLE 用哪个版本。</strong></p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="keyword">const</span> isFull = <span class="regexp">/full body/</span>.<span class="title function_">test</span>(构图);</span><br><span class="line"><span class="keyword">const</span> isWide = isFull || <span class="regexp">/cowboy shot/</span>.<span class="title function_">test</span>(构图);</span><br><span class="line"><span class="keyword">const</span> style = isWide ? <span class="variable constant_">STYLE_FULL</span> : <span class="variable constant_">STYLE</span>;</span><br></pre></td></tr></table></figure>
+
+<p><code>cowboy shot</code>（七分身）和 <code>full body</code> 走精简版 <code>STYLE_FULL</code>，只保留七八个核心画风词；特写和半身才用完整版——因为大远景里材质细节本来就看不清，堆几十个画风词纯属浪费注意力预算。</p>
+<p><strong>二、<code>close-up</code> 才插 FACE。</strong></p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="keyword">const</span> face = <span class="regexp">/close-up/</span>.<span class="title function_">test</span>(构图) ? <span class="variable constant_">FACE</span> : <span class="string">&#x27;&#x27;</span>;</span><br></pre></td></tr></table></figure>
+
+<p><code>(detailed face:1.2), detailed eyes</code> 只在特写时出现。半身图里这两个词会把模型的注意力往脸上拽，反而让构图跑偏。</p>
+<p><strong>三、<code>solid</code> 单人锁跟着构图换档。</strong></p>
+<p><code>full body</code> 用 <code>SOLO_POSE_FULL</code>（<code>solo focus:1.5</code>，权重低一档），其余用 <code>SOLO_POSE</code>（<code>1.75</code>）。远景人物小，权重太高会让画面变成”大字报式单人证件照”。</p>
+<h2 id="案例一：雨巷"><a href="#案例一：雨巷" class="headerlink" title="案例一：雨巷"></a>案例一：雨巷</h2><p>完整正向提示词：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">masterpiece, best quality, year 2025, newest, highres, safe, (1girl:1.2), (loli:1.2), petite, slim, (small breasts:1.15), mornyewuwa, mornye \(wuthering waves\), wuthering waves, (solo:1.9), (single character:1.15), (pale lavender hair:1.12), (lavender hair:1.1), long hair, hair between eyes, (red eyes:1.1), triangle hair ornament, (halo:1.15), (jagged halo:1.08), (gold triangular earrings:1.2), (blue tassel earrings:1.15), feet, (trench coat:1.2), lavender sweater, white boots, (clear umbrella:1.15), (cowboy shot:1.2), (solo focus:1.75), (character focus:1.2), (dynamic pose:1.05), (three-quarter view:1.15), under the umbrella, looking at viewer, quiet smile, rainy alley, (cool light:1.1), (reflections:1.06), anime coloring, cel shading, official art, (cinematic lighting:1.2), (rim lighting:1.15), (vibrant colors:1.08), (natural colors:1.08), (soft skin shading:1.05), (fabric folds:1.05), (sharp focus:1.05), (ambient occlusion:1.05), (depth of field:1.08). Under her umbrella in the rainy alley, Mornye gives the viewer a quiet smile.</span><br></pre></td></tr></table></figure>
+
+<p>看环境那一段，只有三个词：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">rainy alley, (cool light:1.1), (reflections:1.06)</span><br></pre></td></tr></table></figure>
+
+<p>这是整套模板里最克制的地方——<strong>背景只留 1–2 个物件 + 1 个光位</strong>。雨巷没有写积水、没有写霓虹、没有写砖墙、没有写行人，只给了”雨”这个场所和”冷光”这个光位，剩下的交给模型。</p>
+<p>加得越多，画面越散。这一点在上一批图里验证过太多次：场景词一多，模型会把注意力平摊到每个词上，人物反而缩水。降权或者删词，效果比加词明显得多。</p>
+<p><code>(reflections:1.06)</code> 是这张图”湿”的来源。权重只给到 1.06，因为它只是锦上添花——给到 1.3 会开始出现镜面一样的倒影，地面变成湖面，就假了。</p>
+<h2 id="案例二：窗边"><a href="#案例二：窗边" class="headerlink" title="案例二：窗边"></a>案例二：窗边</h2><p>完整正向提示词：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">masterpiece, best quality, year 2025, newest, highres, safe, (1girl:1.2), (loli:1.2), petite, slim, (small breasts:1.15), mornyewuwa, mornye \(wuthering waves\), wuthering waves, (solo:1.9), (single character:1.15), (pale lavender hair:1.12), (lavender hair:1.1), long hair, hair between eyes, (red eyes:1.1), triangle hair ornament, (halo:1.15), (jagged halo:1.08), (gold triangular earrings:1.2), (blue tassel earrings:1.15), feet, (nightgown:1.2), white nightgown, lace trim, barefoot, (cowboy shot:1.2), (solo focus:1.75), (character focus:1.2), (dynamic pose:1.05), (three-quarter view:1.15), sitting by the window, knees tucked, looking at viewer, sleepy smile, bedroom, window, (morning light:1.12), (lace curtain:1.05), anime coloring, cel shading, official art, (cinematic lighting:1.2), (rim lighting:1.15), (vibrant colors:1.08), (natural colors:1.08), (soft skin shading:1.05), (fabric folds:1.05), (sharp focus:1.05), (ambient occlusion:1.05), (depth of field:1.08). Sitting by the bedroom window, Mornye hugs her knees with a sleepy smile.</span><br></pre></td></tr></table></figure>
+
+<p>环境段：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">bedroom, window, (morning light:1.12), (lace curtain:1.05)</span><br></pre></td></tr></table></figure>
+
+<p>两个物件（床、窗）+ 一个光位（晨光）+ 一个装饰（蕾丝窗帘）。窗帘这个东西有点特殊——它同时是物件和光源修饰符：光线穿过蕾丝会在画面里形成细碎的高光点，这是这张图右上角那层”光斑”的来源。</p>
+<p>这张是<strong>逆光</strong>。人物背对窗户，正面全靠反射光，所以 <code>(rim lighting:1.15)</code> 起作用了：发丝和肩膀边缘那一圈亮线，就是边缘光。逆光场景下如果去掉 rim light，人物正面会变成一团死灰。</p>
+<p><code>knees tucked</code>（抱膝）是这张图的姿态锚点。这类具体动作词比 <code>sitting</code> 有用得多——<code>sitting</code> 模型给你一百种坐法，<code>knees tucked</code> 只给你一种。</p>
+<h2 id="负面词是两层"><a href="#负面词是两层" class="headerlink" title="负面词是两层"></a>负面词是两层</h2><p>负面提示词不是一坨，是两段拼起来的：</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="keyword">const</span> negative = 反向追加 + <span class="string">&#x27;, &#x27;</span> + <span class="variable constant_">NEGATIVE</span>;</span><br></pre></td></tr></table></figure>
+
+<p>前半段是<strong>每组自己写的机位压制</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">full body, wide shot, distant subject, tiny person,</span><br></pre></td></tr></table></figure>
+
+<p>因为这组定了 <code>cowboy shot</code>，所以要把”全身””远景””小人”这些往外扩的词压住。</p>
+<p>后半段是<strong>全局通用的技术负面</strong>：低质量、坏手、多指、多人物、文字水印、模糊、镜头畸变、边框留白……还有一类是<strong>角色一致性</strong>的负面词（成年体型、大胸、高个、宽胯），用来把角色锁在设计稿的体态上。</p>
+<p>有一类负面词值得单独说：<code>tights, pantyhose, stockings, leggings, socks, sandals</code>。这是防”画蛇添足”的——正面只写了 <code>feet</code>（赤足），但模型有很强的”给腿穿点什么”的倾向，不压的话经常莫名其妙多出一双黑丝，整张图的年龄感和气质全变。</p>
+<h2 id="权重的直觉"><a href="#权重的直觉" class="headerlink" title="权重的直觉"></a>权重的直觉</h2><p>这套模板的权重分布很有规律：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>典型权重</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>单人锁 <code>solo</code></td>
+<td>1.9</td>
+<td>全场最高，压背景路人</td>
+</tr>
+<tr>
+<td>服装主体</td>
+<td>1.2</td>
+<td>决定轮廓，必须准</td>
+</tr>
+<tr>
+<td>构图</td>
+<td>1.2</td>
+<td>决定人物占画面比例</td>
+</tr>
+<tr>
+<td>角色特征（发色&#x2F;耳坠&#x2F;光环）</td>
+<td>1.08–1.2</td>
+<td>身份锚点，不能丢</td>
+</tr>
+<tr>
+<td>环境光</td>
+<td>1.05–1.12</td>
+<td>只做氛围，不做主体</td>
+</tr>
+<tr>
+<td>画风栈</td>
+<td>1.05–1.2</td>
+<td>多了会腻</td>
+</tr>
+</tbody></table>
+<p><code>solo</code> 给到 1.9 是有代价的——权重这么高，模型会开始”清场”，连该有的背景元素都可能被抹掉。所以负面里还得配一组同向的词（<code>extra person</code> &#x2F; <code>other people</code> &#x2F; <code>pov hand</code>），正负一起压才稳。</p>
+<h2 id="出图到超分"><a href="#出图到超分" class="headerlink" title="出图到超分"></a>出图到超分</h2><p>两步走：</p>
+<p><strong>第一步，Anima 出原图。</strong> 1024×1536，batch 2，steps 32，cfg 4.5，<code>er_sde</code> + <code>simple</code>。</p>
+<p><strong>第二步，Real-ESRGAN 4 倍超分。</strong> 工作流只有四个节点：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">LoadImage → UpscaleModelLoader(RealESRGAN_x4plus_anime_6B.pth)</span><br><span class="line">          → ImageUpscaleWithModel(4x) → SaveImage</span><br></pre></td></tr></table></figure>
+
+<p>1024×1536 进，4096×6144 出，单张 PNG 十几到二十几 MB。走的是 ComfyUI 的 <code>ImageUpscaleWithModel</code>，不是潜空间放大，所以不动画风，只补线条和细节——这也是为什么放大后发丝和布料纹理还能站得住。</p>
+<p>选 <code>anime_6B</code> 这个权重是因为它是针对二次元线条训练的，遇上赛璐璐平涂不会像通用模型那样把边缘磨成糊。代价是对噪点敏感，所以原图必须先干净：低质量词、坏手、多余线条在超分之后会被放大四倍，修不回来。</p>
+<h2 id="改完先校验"><a href="#改完先校验" class="headerlink" title="改完先校验"></a>改完先校验</h2><p>改提示词是个高频动作，所以配了个校验脚本：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">node check_mornye_prompts.cjs</span><br></pre></td></tr></table></figure>
+
+<p>它会检查每组的标题格式、五个必填字段是否缺失或为空（缺一个直接 throw），以及反向追加字段是否存在。</p>
+<p>然后是干跑：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">LOADER=mornye PREVIEW=1 node generate_youhu_cg.cjs</span><br></pre></td></tr></table></figure>
+
+<p><code>PREVIEW=1</code> 只打印拼装结果，不提交任务。改模板这种全局操作，一定要先看一遍拼出来的东西对不对——模板是五十组共用的，一个词写错，五十组一起错。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>这套东西的核心其实不是”提示词写得好”，而是<strong>把提示词拆成了常量、变量和分支</strong>：</p>
+<ul>
+<li>常量（模板）负责一致性：角色、画风、技术底线</li>
+<li>变量（每组的五行）负责多样性：场景、服装、姿态、情绪</li>
+<li>分支（构图判断）负责自适应：特写加面部细化、远景减画风词</li>
+</ul>
+<p>写五十组提示词，如果每组都从零开始手搓，风格一定飘。但把结构定死之后，我只需要关心一件事：这个场景里，光线从哪来。</p>
+<hr>
+<p>顺带一提，<code>视角</code> 那个字段目前是标注用的——<code>普通 / 仰视 / 俯视</code>，拼装时没参与 join。留着是为了以后按视角做批量筛选，比如”所有仰视构图单独跑一轮”。这种”先记着，暂不用”的字段，在提示词工程里其实挺重要。</p>
+</div>
+  
+    <nav class="post-nav">
+      
+      <a class="next" href="/2026/11/10/comfyui-anima/">在本机跑 ComfyUI + Anima：一个 2B 动漫模型的完整落地记录 →</a>
+    </nav>
+  
+</article>
+
+  </main>
+
+  <footer class="site-footer">
+    <a href="https://icp.gov.moe/?keyword=20260549" target="_blank" rel="noopener noreferrer">萌ICP备20260549号</a>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      var themeFadeTimer = 0;
+
+      function render() {
+        btn.textContent = root.getAttribute('data-theme') === 'dark' ? 'LIGHT_MODE' : 'DARK_MODE';
+      }
+
+      render();
+
+      btn.addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        var wantsMotion = !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (wantsMotion) {
+          root.classList.add('theme-fading');
+          window.clearTimeout(themeFadeTimer);
+          themeFadeTimer = window.setTimeout(function () {
+            root.classList.remove('theme-fading');
+          }, 400);
+        }
+
+        root.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem('lofi-theme', next);
+        } catch (e) {}
+        render();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var bar = document.querySelector('.list-bar');
+      var input = document.getElementById('search-input');
+      var panel = document.getElementById('search-results');
+      if (!bar || !input || !panel) return;
+
+      var indexUrl = bar.getAttribute('data-search-index');
+      var indexData = null;
+      var pending = null;
+      var timer = null;
+      var activeIndex = -1;
+
+      function decodeText(value) {
+        var holder = document.createElement('textarea');
+        holder.innerHTML = value == null ? '' : String(value);
+        return holder.value;
+      }
+
+      function loadIndex() {
+        if (indexData) return Promise.resolve(indexData);
+        if (pending) return pending;
+        pending = fetch(indexUrl)
+          .then(function (response) {
+            return response.ok ? response.json() : [];
+          })
+          .then(function (list) {
+            indexData = (list || []).map(function (item) {
+              return {
+                title: decodeText(item.title),
+                url: item.url,
+                content: decodeText(item.content).replace(/\s+/g, ' ')
+              };
+            });
+            return indexData;
+          })
+          .catch(function () {
+            indexData = [];
+            return indexData;
+          });
+        return pending;
+      }
+
+      function snippetOf(item, keyword) {
+        var text = item.content;
+        var pos = text.toLowerCase().indexOf(keyword);
+        if (pos < 0) return text.slice(0, 60);
+        var start = Math.max(0, pos - 18);
+        var head = start > 0 ? '…' : '';
+        var tail = start + 66 < text.length ? '…' : '';
+        return head + text.slice(start, start + 66) + tail;
+      }
+
+      function closePanel() {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        activeIndex = -1;
+      }
+
+      function renderResults(hits, keyword) {
+        panel.hidden = false;
+        panel.innerHTML = '';
+        activeIndex = -1;
+
+        if (!hits.length) {
+          var empty = document.createElement('p');
+          empty.className = 'search-empty';
+          empty.textContent = '没有找到匹配的文章';
+          panel.appendChild(empty);
+          return;
+        }
+
+        hits.slice(0, 8).forEach(function (item) {
+          var link = document.createElement('a');
+          link.className = 'search-item';
+          link.href = item.url;
+
+          var title = document.createElement('span');
+          title.className = 'search-item-title';
+          title.textContent = item.title;
+
+          var snippet = document.createElement('span');
+          snippet.className = 'search-item-snippet';
+          snippet.textContent = snippetOf(item, keyword);
+
+          link.appendChild(title);
+          link.appendChild(snippet);
+          panel.appendChild(link);
+        });
+      }
+
+      function runSearch() {
+        var keyword = input.value.trim().toLowerCase();
+        if (!keyword) {
+          closePanel();
+          return;
+        }
+        loadIndex().then(function (list) {
+          if (input.value.trim().toLowerCase() !== keyword) return;
+          var hits = list.filter(function (item) {
+            return item.title.toLowerCase().indexOf(keyword) >= 0 ||
+              item.content.toLowerCase().indexOf(keyword) >= 0;
+          });
+          renderResults(hits, keyword);
+        });
+      }
+
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(runSearch, 180);
+      });
+
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          input.value = '';
+          closePanel();
+          return;
+        }
+
+        var items = panel.hidden ? [] : Array.prototype.slice.call(panel.querySelectorAll('.search-item'));
+        if (!items.length) return;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          activeIndex = event.key === 'ArrowDown'
+            ? (activeIndex + 1) % items.length
+            : (activeIndex - 1 + items.length) % items.length;
+          items.forEach(function (el, i) {
+            el.classList.toggle('is-active', i === activeIndex);
+          });
+        } else if (event.key === 'Enter') {
+          var target = items[activeIndex >= 0 ? activeIndex : 0];
+          if (target) {
+            event.preventDefault();
+            window.location.href = target.getAttribute('href');
+          }
+        }
+      });
+
+      input.addEventListener('focus', function () {
+        if (input.value.trim()) runSearch();
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!bar.contains(event.target)) closePanel();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sortBtn = document.getElementById('sort-toggle');
+      var list = document.querySelector('.post-list');
+      if (!sortBtn || !list) return;
+
+      var labels = { desc: '时间倒序 ↓', asc: '时间正序 ↑' };
+      var currentOrder = 'desc';
+      var FLIP_MS = 420;
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function timestampOf(item) {
+        var time = item.querySelector('time[datetime]');
+        var value = time ? Date.parse(time.getAttribute('datetime')) : NaN;
+        return isNaN(value) ? 0 : value;
+      }
+
+      function apply(order, animate) {
+        var items = Array.prototype.slice.call(list.children);
+        var previousTop = new Map();
+
+        if (animate && !reducedMotion) {
+          items.forEach(function (item) {
+            previousTop.set(item, item.getBoundingClientRect().top);
+          });
+        }
+
+        var sorted = items.slice().sort(function (a, b) {
+          return order === 'asc' ? timestampOf(a) - timestampOf(b) : timestampOf(b) - timestampOf(a);
+        });
+
+        sorted.forEach(function (item) {
+          list.appendChild(item);
+        });
+
+        currentOrder = order;
+        sortBtn.textContent = labels[order];
+
+        if (!previousTop.size) return;
+
+        sorted.forEach(function (item) {
+          var before = previousTop.get(item);
+          if (before === undefined) return;
+
+          var delta = before - item.getBoundingClientRect().top;
+          if (!delta) return;
+
+          item.style.transition = 'none';
+          item.style.transform = 'translateY(' + delta + 'px)';
+          void item.offsetHeight;
+          item.style.transition = 'transform ' + FLIP_MS + 'ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+          item.style.transform = 'translateY(0)';
+
+          window.setTimeout(function () {
+            item.style.transition = '';
+            item.style.transform = '';
+          }, FLIP_MS + 60);
+        });
+      }
+
+      var savedOrder = 'desc';
+      try {
+        savedOrder = localStorage.getItem('lofi-sort') === 'asc' ? 'asc' : 'desc';
+      } catch (e) {}
+      apply(savedOrder, false);
+
+      sortBtn.addEventListener('click', function () {
+        var next = currentOrder === 'asc' ? 'desc' : 'asc';
+        apply(next, true);
+        try {
+          localStorage.setItem('lofi-sort', next);
+        } catch (e) {}
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sprites = ["/images/91/thumb/1.png","/images/91/thumb/2.png","/images/91/thumb/3.png","/images/91/thumb/4.png"];
+      var matterUrl = '/js/matter.min.js';
+      var btn = document.getElementById('theme-toggle');
+      if (!btn || !sprites.length) return;
+
+      var CLICK_WINDOW = 2000;
+      var CLICK_NEEDED = 6;
+      var RAIN_MS = 10000;
+      var SPAWN_INTERVAL = 110;
+      var START_OFFSET = 60;
+      var MIN_WIDTH = 40;
+      var MAX_WIDTH = 110;
+      var TIME_SCALE = 0.5;
+      var STEP_MS = 16.666;
+      var REMOVE_MARGIN = 220;
+      var SPRING_STIFFNESS = 0.3;
+      var SPRING_DAMPING = 0.1;
+      var MAX_SQUEEZE = 0.25;
+
+      var clicks = [];
+      var running = false;
+      var engine = null;
+      var bodyItemMap = new Map();
+      var floorBody = null;
+      var sideWalls = [];
+      var layer = null;
+      var items = [];
+      var lastSpawn = 0;
+      var startedAt = 0;
+      var rafId = 0;
+      var matterReady = null;
+      var preloaded = false;
+
+      var spritesLoaded = sprites.map(function (src) {
+        var image = new Image();
+        image.src = src;
+        return image;
+      });
+
+      function viewport() {
+        return { w: window.innerWidth, h: window.innerHeight };
+      }
+
+      function loadMatter() {
+        if (window.Matter) return Promise.resolve(window.Matter);
+        if (matterReady) return matterReady;
+
+        matterReady = new Promise(function (resolve, reject) {
+          var tag = document.createElement('script');
+          tag.src = matterUrl;
+          tag.async = true;
+          tag.onload = function () {
+            resolve(window.Matter);
+          };
+          tag.onerror = function () {
+            matterReady = null;
+            reject(new Error('matter load failed'));
+          };
+          document.head.appendChild(tag);
+        });
+
+        return matterReady;
+      }
+
+      function warmUp() {
+        if (preloaded) return;
+        preloaded = true;
+        loadMatter().catch(function () {});
+      }
+
+      function buildWorld(Matter) {
+        var vp = viewport();
+        var localEngine = Matter.Engine.create();
+
+        localEngine.gravity.y = 1;
+        localEngine.timing.timeScale = TIME_SCALE;
+
+        var wallOptions = { isStatic: true, friction: 0.4, restitution: 0.1 };
+        var wallHeight = vp.h * 3;
+
+        sideWalls = [
+          Matter.Bodies.rectangle(-40, vp.h / 2, 80, wallHeight, wallOptions),
+          Matter.Bodies.rectangle(vp.w + 40, vp.h / 2, 80, wallHeight, wallOptions)
+        ];
+        floorBody = Matter.Bodies.rectangle(vp.w / 2, vp.h + 40, vp.w * 4, 80, wallOptions);
+
+        Matter.Composite.add(localEngine.world, sideWalls.concat([floorBody]));
+        return localEngine;
+      }
+
+      function sync(item) {
+        var body = item.body;
+        var left = body.position.x - item.w / 2;
+        var top = body.position.y - item.h / 2;
+        item.el.style.transform =
+          'translate3d(' + left + 'px,' + top + 'px,0) rotate(' + body.angle + 'rad)';
+      }
+
+      function updateDeform(item) {
+        if (!item.deform && !item.deformVel) {
+          if (item.scaleX !== 1 || item.scaleY !== 1) {
+            item.sprite.style.transform = '';
+            item.scaleX = 1;
+            item.scaleY = 1;
+          }
+          return;
+        }
+
+        item.deformVel += -SPRING_STIFFNESS * item.deform - SPRING_DAMPING * item.deformVel;
+        item.deform += item.deformVel;
+
+        if (Math.abs(item.deform) < 0.002 && Math.abs(item.deformVel) < 0.002) {
+          item.deform = 0;
+          item.deformVel = 0;
+        }
+
+        var scaleX = 1 - item.deform * item.deformAx;
+        var scaleY = 1 - item.deform * item.deformAy;
+
+        if (Math.abs(scaleX - item.scaleX) > 0.002 || Math.abs(scaleY - item.scaleY) > 0.002) {
+          item.scaleX = scaleX;
+          item.scaleY = scaleY;
+          item.sprite.style.transform =
+            'scale(' + scaleX.toFixed(3) + ',' + scaleY.toFixed(3) + ')';
+        }
+      }
+
+      function squeezeBody(body, normal, impact) {
+        var item = bodyItemMap.get(body.id);
+        if (!item) return;
+
+        var localAngle = Math.atan2(normal.y, normal.x) - body.angle;
+        item.deformAx = Math.abs(Math.cos(localAngle));
+        item.deformAy = Math.abs(Math.sin(localAngle));
+        item.deform = Math.max(item.deform, impact);
+        item.deformVel = 0;
+      }
+
+      function bindCollisions(Matter) {
+        Matter.Events.on(engine, 'collisionStart', function (event) {
+          var pairs = event.pairs;
+
+          for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i];
+            var velocityA = pair.bodyA.velocity;
+            var velocityB = pair.bodyB.velocity;
+            var dx = velocityA.x - velocityB.x;
+            var dy = velocityA.y - velocityB.y;
+            var impact = Math.min(MAX_SQUEEZE, Math.sqrt(dx * dx + dy * dy) * 0.07);
+
+            if (impact < 0.03) continue;
+
+            var normal = pair.collision.normal;
+            squeezeBody(pair.bodyA, normal, impact);
+            squeezeBody(pair.bodyB, normal, impact);
+          }
+        });
+      }
+
+      function spawn(Matter) {
+        var sprite = spritesLoaded[Math.floor(Math.random() * spritesLoaded.length)];
+        var width = MIN_WIDTH + Math.random() * (MAX_WIDTH - MIN_WIDTH);
+        var ratio = sprite.naturalWidth ? sprite.naturalHeight / sprite.naturalWidth : 1.3;
+        var height = width * ratio;
+        var vp = viewport();
+
+        var el = document.createElement('div');
+        el.className = 'egg-item';
+        el.style.width = width + 'px';
+        el.style.height = height + 'px';
+
+        var spriteEl = document.createElement('img');
+        spriteEl.className = 'egg-sprite';
+        spriteEl.src = sprite.src;
+        spriteEl.alt = '';
+        el.appendChild(spriteEl);
+        layer.appendChild(el);
+
+        var body = Matter.Bodies.rectangle(
+          width / 2 + Math.random() * Math.max(0, vp.w - width),
+          -height - START_OFFSET - Math.random() * 90,
+          width,
+          height,
+          {
+            restitution: 0.6,
+            friction: 0.3,
+            frictionStatic: 0.6,
+            frictionAir: 0.006,
+            density: 0.0012,
+            slop: 0.02
+          }
+        );
+
+        Matter.Body.setAngle(body, (Math.random() - 0.5) * 0.7);
+        Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+        Matter.Composite.add(engine.world, body);
+
+        var item = {
+          el: el,
+          sprite: spriteEl,
+          body: body,
+          w: width,
+          h: height,
+          deform: 0,
+          deformVel: 0,
+          deformAx: 1,
+          deformAy: 0,
+          scaleX: 1,
+          scaleY: 1
+        };
+
+        bodyItemMap.set(body.id, item);
+        sync(item);
+        items.push(item);
+      }
+
+      function removeItem(item) {
+        if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
+        if (engine) Matter.Composite.remove(engine.world, item.body);
+        bodyItemMap.delete(item.body.id);
+      }
+
+      function step(now) {
+        var Matter = window.Matter;
+        var vp = viewport();
+        var elapsed = now - startedAt;
+
+        if (elapsed < RAIN_MS) {
+          if (now - lastSpawn >= SPAWN_INTERVAL) {
+            lastSpawn = now;
+            spawn(Matter);
+          }
+        } else if (floorBody) {
+          Matter.Composite.remove(engine.world, floorBody);
+          floorBody = null;
+        }
+
+        Matter.Engine.update(engine, STEP_MS);
+
+        for (var i = items.length - 1; i >= 0; i--) {
+          var item = items[i];
+          updateDeform(item);
+          sync(item);
+
+          if (item.body.position.y - item.h / 2 > vp.h + REMOVE_MARGIN) {
+            removeItem(item);
+            items.splice(i, 1);
+          }
+        }
+
+        if (!floorBody && !items.length) {
+          stop();
+          return;
+        }
+
+        rafId = requestAnimationFrame(step);
+      }
+
+      function stop() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+
+        items = [];
+        floorBody = null;
+        sideWalls = [];
+        bodyItemMap.clear();
+
+        if (engine && window.Matter) {
+          window.Matter.Engine.clear(engine);
+        }
+        engine = null;
+
+        if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
+        layer = null;
+        running = false;
+      }
+
+      function start() {
+        if (running) return;
+
+        loadMatter()
+          .then(function (Matter) {
+            if (!Matter || running) return;
+
+            running = true;
+            items = [];
+            lastSpawn = 0;
+            startedAt = performance.now();
+
+            layer = document.createElement('div');
+            layer.className = 'egg-layer';
+            layer.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(layer);
+
+            engine = buildWorld(Matter);
+            bindCollisions(Matter);
+            rafId = requestAnimationFrame(step);
+          })
+          .catch(function () {});
+      }
+
+      btn.addEventListener('click', function () {
+        warmUp();
+
+        var now = Date.now();
+        clicks = clicks.filter(function (stamp) {
+          return now - stamp < CLICK_WINDOW;
+        });
+        clicks.push(now);
+
+        if (running || clicks.length < CLICK_NEEDED) return;
+        clicks = [];
+        start();
+      });
+
+      window.addEventListener('resize', function () {
+        if (!running || !window.Matter) return;
+
+        var vp = viewport();
+
+        if (sideWalls.length === 2) {
+          window.Matter.Body.setPosition(sideWalls[0], { x: -40, y: vp.h / 2 });
+          window.Matter.Body.setPosition(sideWalls[1], { x: vp.w + 40, y: vp.h / 2 });
+        }
+        if (floorBody) {
+          window.Matter.Body.setPosition(floorBody, { x: vp.w / 2, y: vp.h + 40 });
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var body = document.body;
+      var HOME_URL = '/';
+      var ABOUT_URL = '/about/';
+      var ORDER = [HOME_URL, ABOUT_URL];
+      var NAV_KEY = 'lofi-nav';
+      var POST_KEY = 'lofi-post-rect';
+      var LEAVE_MS = 200;
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var busy = false;
+
+      function pageIndex() {
+        var path = window.location.pathname;
+        for (var i = 0; i < ORDER.length; i++) {
+          if (path === ORDER[i]) return i;
+        }
+        return -1;
+      }
+
+      function navigate(url, direction) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        try {
+          sessionStorage.setItem(NAV_KEY, direction);
+        } catch (e) {}
+
+        body.classList.add('nav-leave-' + direction);
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, LEAVE_MS);
+      }
+
+      /*
+        打开文章：把卡片的屏幕位置和尺寸交给下一个页面，
+        由那边用一个同样的矩形扩展成整页，形成"卡片长成页面"的连续感。
+      */
+      function navigatePost(url, card) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        var rect = card.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+
+        try {
+          sessionStorage.setItem(POST_KEY, '1');
+        } catch (e) {}
+
+        var expander = document.createElement('div');
+        expander.className = 'card-expander';
+        expander.style.transform =
+          'translate(' + rect.left + 'px,' + rect.top + 'px) scale(' +
+          rect.width / vw + ',' + rect.height / vh + ')';
+        document.body.appendChild(expander);
+
+        void expander.offsetWidth;
+
+        expander.style.transition = 'transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+        expander.style.transform = 'translate(0,0) scale(1,1)';
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, 430);
+      }
+
+      function goForward() {
+        var index = pageIndex();
+        if (index < 0 || index + 1 >= ORDER.length) return;
+        navigate(ORDER[index + 1], 'forward');
+      }
+
+      function goBack() {
+        var index = pageIndex();
+        if (index < 0) {
+          navigate(HOME_URL, 'back');
+          return;
+        }
+        if (index <= 0) return;
+        navigate(ORDER[index - 1], 'back');
+      }
+
+      /* 左右滑动切换页面 */
+      var startX = 0;
+      var startY = 0;
+      var tracking = false;
+
+      document.addEventListener('touchstart', function (event) {
+        if (event.touches.length !== 1) {
+          tracking = false;
+          return;
+        }
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        tracking = true;
+      }, { passive: true });
+
+      document.addEventListener('touchend', function (event) {
+        if (!tracking) return;
+        tracking = false;
+
+        var touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+
+        if (Math.abs(dx) < 70) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+        if (dx < 0) goForward();
+        else goBack();
+      }, { passive: true });
+
+      /* 键盘左右方向键，桌面端也能翻页 */
+      document.addEventListener('keydown', function (event) {
+        var tag = (event.target && event.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (event.key === 'ArrowRight') goForward();
+        else if (event.key === 'ArrowLeft') goBack();
+      });
+
+      /* 站内链接：先播离场动画，再跳转 */
+      document.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        var link = event.target && event.target.closest ? event.target.closest('a') : null;
+        if (!link) return;
+
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) !== '/') return;
+        if (link.target && link.target !== '_self') return;
+
+        var url;
+        try {
+          url = new URL(link.href, window.location.href);
+        } catch (e) {
+          return;
+        }
+        if (url.origin !== window.location.origin) return;
+        if (url.pathname === window.location.pathname) return;
+
+        event.preventDefault();
+
+        var card = link.closest('.post-card');
+        if (card) {
+          navigatePost(url.pathname, card);
+          return;
+        }
+
+        var targetIndex = ORDER.indexOf(url.pathname);
+        var currentIndex = pageIndex();
+        var direction =
+          targetIndex >= 0 && currentIndex >= 0 && targetIndex < currentIndex ? 'back' : 'forward';
+        navigate(url.pathname, direction);
+      });
+
+      /* 文章卡片滚动进入视口时依次归位 */
+      var cards = document.querySelectorAll('.post-card');
+      if (cards.length) {
+        if ('IntersectionObserver' in window && !reduced) {
+          var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              var card = entry.target;
+              card.style.transitionDelay = (card.dataset.animIndex || 0) * 60 + 'ms';
+              card.classList.add('is-in');
+              observer.unobserve(card);
+            });
+          }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+          Array.prototype.forEach.call(cards, function (card, index) {
+            card.dataset.animIndex = index % 6;
+            observer.observe(card);
+          });
+        } else {
+          Array.prototype.forEach.call(cards, function (card) {
+            card.classList.add('is-in');
+          });
+        }
+      }
+    })();
+  </script>
+
+  <script>
+    (function () {
+      /* 固定"每秒还原多少字"，长度不同的内容自动得到不同的总时长，手感才一致 */
+      var SPEED = 80;
+      var MIN_DURATION = 400;
+      var POST_DELAY = 300;
+      var CHARS =
+        '的一是了我不人在他有这个上们来到时大地为子中你说生国年着就那和要她出也得里后自以会家可下而过天去能对小多然于心学么之都好看起发当没成只如事把还用第样道想作种开美总从无情己面最女但现前些所同日手又行意动方期它头经长儿回位分爱老因很给名法间斯知世什两次使身者被高已亲其进此话常与活正感';
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (noMotion || !document.createTreeWalker) return;
+
+      var pool = '';
+
+      function randomChars(length) {
+        var out = '';
+        for (var i = 0; i < length; i++) {
+          out += CHARS.charAt(Math.floor(Math.random() * CHARS.length));
+        }
+        return out;
+      }
+
+      function garbles(length) {
+        while (pool.length < length + 64) {
+          pool += randomChars(256);
+        }
+        var offset = Math.floor(Math.random() * (pool.length - length));
+        return pool.substr(offset, length);
+      }
+
+      function collect(root) {
+        var list = [];
+        if (!root) return list;
+
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        var node = walker.nextNode();
+
+        while (node) {
+          var value = node.nodeValue;
+          if (value && value.replace(/\s/g, '').length) {
+            list.push({ node: node, text: value });
+          }
+          node = walker.nextNode();
+        }
+
+        return list;
+      }
+
+      /* 把若干区域的文字拼成一条序列，按进度从左到右、从上到下还原 */
+      function play(roots, delay, onReady) {
+        var entries = [];
+        var total = 0;
+
+        for (var i = 0; i < roots.length; i++) {
+          var found = collect(roots[i]);
+          for (var j = 0; j < found.length; j++) {
+            entries.push({ node: found[j].node, text: found[j].text, start: total, drawn: -1 });
+            total += found[j].text.length;
+          }
+        }
+
+        if (!total) {
+          if (onReady) onReady();
+          return;
+        }
+
+        function draw(revealed) {
+          for (var k = 0; k < entries.length; k++) {
+            var entry = entries[k];
+            var length = entry.text.length;
+            var done = revealed - entry.start;
+
+            if (done < 0) done = 0;
+            else if (done > length) done = length;
+
+            if (done === entry.drawn) continue;
+
+            entry.drawn = done;
+            entry.node.nodeValue =
+              done >= length ? entry.text : entry.text.slice(0, done) + garbles(length - done);
+          }
+        }
+
+        function animate() {
+          var startedAt = 0;
+          var duration = Math.max(MIN_DURATION, (total / SPEED) * 1000);
+
+          function tick(now) {
+            if (!startedAt) startedAt = now;
+
+            var progress = (now - startedAt) / duration;
+            if (progress > 1) progress = 1;
+
+            draw(Math.round(progress * total));
+
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              for (var m = 0; m < entries.length; m++) {
+                entries[m].node.nodeValue = entries[m].text;
+              }
+            }
+          }
+
+          requestAnimationFrame(tick);
+        }
+
+        /* 先整段变成乱码再解除隐藏，保证第一次被看到时就是乱码 */
+        draw(0);
+        if (onReady) onReady();
+
+        if (delay > 0) window.setTimeout(animate, delay);
+        else animate();
+      }
+
+      var postRoots = [];
+      var postTitle = document.querySelector('.post-title');
+      var postContent = document.querySelector('.post-content');
+
+      if (postTitle) postRoots.push(postTitle);
+      if (postContent) postRoots.push(postContent);
+
+      if (postRoots.length) {
+        /* 文章页：立刻变乱码并解除隐藏，等卡片扩展层揭开一点再开始逐字还原 */
+        play(postRoots, POST_DELAY, function () {
+          document.documentElement.classList.remove('decrypt-pending');
+        });
+        return;
+      }
+
+      /* 列表页：卡片进入视口时各自解密 */
+      var cards = document.querySelectorAll('.post-card');
+      if (!cards.length || !('IntersectionObserver' in window)) return;
+
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+
+          var roots = [];
+          var title = entry.target.querySelector('.post-card-title');
+          var excerpt = entry.target.querySelector('.post-card-excerpt');
+
+          if (title) roots.push(title);
+          if (excerpt) roots.push(excerpt);
+
+          play(roots, 0);
+        });
+      }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+      Array.prototype.forEach.call(cards, function (card) {
+        observer.observe(card);
+      });
+    })();
+  </script>
+
+</body>
+</html>
