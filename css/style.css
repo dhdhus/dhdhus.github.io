@@ -343,12 +343,63 @@ a {
 .post-content pre {
   margin: 0 0 16px;
   padding: 14px;
+  max-width: 100%;
   overflow-x: auto;
   background: var(--soft);
   border: 2px solid var(--line);
 }
 
 .post-content pre code {
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+/*
+  Hexo 的 highlight.js 会把代码包成 <figure class="highlight"><table><tr><td><pre>。
+  表格是自动布局的，最小宽度由内容（那行超长提示词）决定，于是整张表无视父容器
+  一路往右撑，pre 上的 overflow-x 完全失效。这里把表格改成定宽布局、去掉它自带
+  的边框内距，让滚动条回到 pre 自己身上。
+*/
+.post-content figure.highlight {
+  margin: 0 0 16px;
+  max-width: 100%;
+  background: var(--soft);
+  border: 2px solid var(--line);
+}
+
+.post-content figure.highlight table {
+  width: 100%;
+  margin: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.post-content figure.highlight tbody,
+.post-content figure.highlight tr {
+  border: none;
+}
+
+.post-content figure.highlight td {
+  padding: 0;
+  border: none;
+}
+
+.post-content figure.highlight td.code {
+  width: 100%;
+}
+
+.post-content figure.highlight pre {
+  margin: 0;
+  padding: 14px;
+  max-width: 100%;
+  overflow-x: auto;
+  background: none;
+  border: none;
+}
+
+.post-content figure.highlight pre code {
   padding: 0;
   background: none;
   border: none;
