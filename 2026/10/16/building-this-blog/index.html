@@ -215,6 +215,116 @@
 <p>骨架结构、每个文件的职责、各个功能的参数，都写进了三份文档（README、STRUCTURE、DEVLOG），方便以后回来改的时候不用重新读一遍代码。</p>
 <p>下一步大概是把内容写起来。技术笔记、课程记录、折腾过的小项目都可以往里放——博客的价值终究在于里面写了什么，而不在于它长什么样。</p>
 </div>
+
+  
+    
+    
+      <section class="post-comments" id="post-comments" aria-label="评论">
+        <div class="post-comments-head">
+          <span class="post-comments-title">COMMENTS</span>
+          <span class="post-comments-hint" id="comments-hint">加载中…</span>
+        </div>
+        <div class="giscus" id="giscus-container"></div>
+      </section>
+      <script>
+        (function () {
+          var root = document.documentElement;
+          var box = document.getElementById('giscus-container');
+          var hint = document.getElementById('comments-hint');
+          if (!box) return;
+
+          var TERM = "2026/10/16/building-this-blog/";
+          var CFG = {
+            repo: "dhdhus/dhdhus.github.io",
+            repoId: "R_kgDOVIwyzw",
+            category: "Announcements",
+            categoryId: "DIC_kwDOVIwyz84DMCBU",
+            mapping: "specific",
+            reactionsEnabled: "1",
+            inputPosition: "top",
+            lang: "zh-CN"
+          };
+
+          function themeName() {
+            return root.getAttribute('data-theme') === 'dark' ? 'dark_dimmed' : 'light';
+          }
+
+          function post(msg) {
+            var frame = box.querySelector('iframe.giscus-frame');
+            if (!frame || !frame.contentWindow) return;
+            frame.contentWindow.postMessage({ giscus: msg }, 'https://giscus.app');
+          }
+
+          // 用自己控制的 IntersectionObserver 决定何时加载：
+          // giscus 自带的 data-loading="lazy" 依赖它自己的 IO，滚动容器/布局
+          // 一变就再也触发不了，iframe 会永远停在 150px 空白。
+          // 这里改成"接近视口才注入脚本"，注入时一律 eager。
+          var started = false;
+          function mount() {
+            if (started) return;
+            started = true;
+
+            var script = document.createElement('script');
+            script.src = 'https://giscus.app/client.js';
+            script.async = true;
+            script.crossOrigin = 'anonymous';
+            script.setAttribute('data-repo', CFG.repo);
+            script.setAttribute('data-repo-id', CFG.repoId);
+            script.setAttribute('data-category', CFG.category);
+            script.setAttribute('data-category-id', CFG.categoryId);
+            script.setAttribute('data-mapping', CFG.mapping);
+            script.setAttribute('data-term', TERM);
+            script.setAttribute('data-reactions-enabled', CFG.reactionsEnabled);
+            script.setAttribute('data-emit-metadata', '0');
+            script.setAttribute('data-input-position', CFG.inputPosition);
+            script.setAttribute('data-theme', themeName());
+            script.setAttribute('data-lang', CFG.lang);
+            script.setAttribute('data-loading', 'eager');
+
+            script.onload = function () {
+              if (hint) hint.textContent = '由 giscus 提供，需 GitHub 账号登录';
+            };
+            script.onerror = function () {
+              var sec = document.getElementById('post-comments');
+              if (sec) sec.hidden = true;
+            };
+
+            box.appendChild(script);
+          }
+
+          if ('IntersectionObserver' in window) {
+            var io = new IntersectionObserver(function (entries) {
+              for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting) {
+                  io.disconnect();
+                  mount();
+                  return;
+                }
+              }
+            }, { rootMargin: '600px 0px' });
+            io.observe(box);
+            // 兜底：8 秒还没进视口就照常加载，避免 IO 被别的东西挡住
+            setTimeout(function () { io.disconnect(); mount(); }, 8000);
+          } else {
+            mount();
+          }
+
+          // 深浅色切换时同步 iframe 主题
+          new MutationObserver(function () {
+            post({ setConfig: { theme: themeName() } });
+          }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+
+          // giscus 会回报自己的高度，交给它自己处理，这里只在出错时兜底
+          window.addEventListener('message', function (event) {
+            if (event.origin !== 'https://giscus.app') return;
+            if (!event.data || !event.data.giscus) return;
+            if (hint) hint.classList.add('is-ready');
+          });
+        })();
+      </script>
+    
+  
+
   
     <nav class="post-nav">
       <a class="prev" href="/2026/10/17/about%20use%20hexo/">← 建站记录：关于大概如何使用hexo</a>

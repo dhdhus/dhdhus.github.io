@@ -452,6 +452,44 @@ a {
   margin-left: auto;
 }
 
+/* 评论（giscus） */
+.post-comments {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 2px solid var(--line);
+}
+
+.post-comments-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+
+.post-comments-title {
+  padding: 2px 8px;
+  color: var(--bg);
+  background: var(--fg);
+  letter-spacing: 1px;
+}
+
+.post-comments-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.post-comments-hint.is-ready {
+  opacity: 0.55;
+}
+
+.giscus,
+.giscus-frame {
+  width: 100%;
+  border: none;
+}
+
 /* 分页 */
 .page-nav {
   display: flex;
