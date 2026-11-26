@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>给静态博客装个评论区 | W_zzzz&#39;s blog</title>
+  <meta name="description" content="一个黑白极简的像素风技术博客">
+  <style>
+    /* 关键样式内联：保证首屏绘制之前背景色和过渡动画就已就位，避免闪白或闪一下 */
+    html {
+      background-color: #ffffff;
+    }
+
+    html[data-theme="dark"] {
+      background-color: #000000;
+    }
+
+    /* 打开文章时的"容器扩展"层：从卡片矩形长成整页 */
+    .card-expander {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 300;
+      background-color: #ffffff;
+      border: 2px solid #000000;
+      transform-origin: top left;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    html[data-theme="dark"] .card-expander {
+      background-color: #000000;
+      border-color: #ffffff;
+    }
+
+    #post-expander {
+      display: none;
+    }
+
+    #post-expander.is-active {
+      display: block;
+    }
+
+    /*
+      解密动画就位之前先藏住文章文字，否则会先闪一帧原文再变乱码。
+      末尾的动画是兜底：万一脚本没跑起来，两秒后文字自动显示出来。
+    */
+    html.decrypt-pending .post-title,
+    html.decrypt-pending .post-content {
+      visibility: hidden;
+      animation: lofi-decrypt-reveal 0s linear 2000ms forwards;
+    }
+
+    @keyframes lofi-decrypt-reveal {
+      to {
+        visibility: visible;
+      }
+    }
+
+    /* 页面切换：内容区从侧边滑入 */
+    html.nav-enter-forward .wrap {
+      animation: lofi-enter-right 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    html.nav-enter-back .wrap {
+      animation: lofi-enter-left 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+
+    @keyframes lofi-enter-right {
+      from {
+        opacity: 0;
+        transform: translateX(38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes lofi-enter-left {
+      from {
+        opacity: 0;
+        transform: translateX(-38px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+  </style>
+  <script>
+    (function () {
+      var root = document.documentElement;
+
+      try {
+        var saved = localStorage.getItem('lofi-theme');
+        if (saved === 'dark' || saved === 'light') {
+          root.setAttribute('data-theme', saved);
+        }
+
+        root.className += ' js-anim';
+
+        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        var navDirection = sessionStorage.getItem('lofi-nav');
+        if (navDirection) {
+          sessionStorage.removeItem('lofi-nav');
+          if (!reduced) root.className += ' nav-enter-' + navDirection;
+        }
+
+        if (!reduced) root.className += ' decrypt-pending';
+
+      } catch (e) {}
+    })();
+  </script>
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/latin/Fusion-Pixel-12px-Proportional-Latin.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/zh_hans/Fusion-Pixel-12px-Proportional-Simplified-Chinese.css">
+
+  
+<link rel="stylesheet" href="/fonts/fusion-pixel-12px/monospaced-latin/Fusion-Pixel-12px-Monospaced-Latin.css">
+
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 8.1.2"></head>
+<body>
+
+  <div class="card-expander" id="post-expander" aria-hidden="true"></div>
+  <script>
+    (function () {
+      var expander = document.getElementById('post-expander');
+      var pending = null;
+
+      try {
+        pending = sessionStorage.getItem('lofi-post-rect');
+        sessionStorage.removeItem('lofi-post-rect');
+      } catch (e) {}
+
+      if (!expander) return;
+
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (!pending || noMotion) {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+        return;
+      }
+
+      /*
+        上一页已经把这块矩形放大到铺满整屏了，这里直接接住那个"满屏"状态，
+        再把它揭开露出文章内容，两段动作首尾相接成一次连续转场。
+      */
+      expander.classList.add('is-active');
+
+      requestAnimationFrame(function () {
+        expander.style.transition = 'opacity 420ms ease-out';
+        expander.style.opacity = '0';
+      });
+
+      window.setTimeout(function () {
+        if (expander.parentNode) expander.parentNode.removeChild(expander);
+      }, 480);
+    })();
+  </script>
+
+  <header class="topbar">
+    <nav class="tabs">
+      <a class="tab active" href="/">我的文章</a>
+      <a class="tab" href="/about/">关于我自己</a>
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="切换深浅色">DARK_MODE</button>
+  </header>
+
+  <main class="wrap">
+    <article class="post">
+  <h1 class="post-title">给静态博客装个评论区</h1>
+  <time class="post-date" datetime="2026-11-26T15:52:00.000Z">2026-11-26</time>
+  <div class="post-content"><p><img src="/images/giscus-comments.jpg" alt="静态页面里的评论区其实是别人的 iframe"></p>
+<p>上一篇说静态站的天花板是”没地方存数据”，评论区就是最典型的例子。但真做起来发现，评论区根本不需要我自己存数据 —— 把别人的服务嵌进来就行。</p>
+<h2 id="选-giscus-的原因"><a href="#选-giscus-的原因" class="headerlink" title="选 giscus 的原因"></a>选 giscus 的原因</h2><p>GitHub Pages 只吐静态文件，所以动态部分必须外包。可选的路子有几条：</p>
+<ul>
+<li>Waline &#x2F; Twikoo：要自己起一个 Node 服务，Vercel 免费额度够用，但多一层依赖</li>
+<li>Cloudflare Worker + D1：灵活，但要迁 DNS</li>
+<li><strong>giscus</strong>：把 GitHub Discussions 当数据库，评论就是仓库里的讨论帖</li>
+</ul>
+<p>第三条最省事。零服务器、零数据库、零费用，数据还在自己仓库里，哪天不用了把 Discussions 关掉就行。唯一的门槛是评论者得有 GitHub 账号 —— 对技术博客来说不算门槛。</p>
+<h2 id="三步配置"><a href="#三步配置" class="headerlink" title="三步配置"></a>三步配置</h2><p>全程在网页上点，不用改代码：</p>
+<ol>
+<li>仓库 Settings → General → Features → 勾上 <strong>Discussions</strong></li>
+<li>到 <a target="_blank" rel="noopener" href="https://github.com/apps/giscus">https://github.com/apps/giscus</a> 安装，只授权这一个仓库</li>
+<li>打开 <a target="_blank" rel="noopener" href="https://giscus.app/zh-CN">https://giscus.app/zh-CN</a> ，填仓库名，页面会给出 <code>repo-id</code> 和 <code>category-id</code></li>
+</ol>
+<p>第三部的两个 id 长得像 <code>R_kgDOVIwyzw</code> 和 <code>DIC_kwDOVIwyz84DMCBU</code>。官方页面那个”分类”下拉框有时候加载不出来，会给一段带占位符的代码：</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line">data-category=&quot;[在此输入分类名]&quot;</span><br><span class="line">data-category-id=&quot;[在此输入分类 ID]&quot;</span><br></pre></td></tr></table></figure>
+
+<p>这时候可以直接问它的 API：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">GET https://giscus.app/api/discussions/categories?repo=USER/REPO&amp;repoId=R_xxx</span><br></pre></td></tr></table></figure>
+
+<p>返回一串分类和对应 id。我选的是 <code>Announcements</code>，因为这个分类只允许仓库维护者新建讨论，访客只能在已有讨论下面回复 —— 灌水的人没法给你凭空开新帖。</p>
+<h2 id="主题里的接线"><a href="#主题里的接线" class="headerlink" title="主题里的接线"></a>主题里的接线</h2><p>我给主题加了 <code>themes/lofi/_config.yml</code>，把评论开关和参数都放进去：</p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">comments:</span></span><br><span class="line">  <span class="attr">enable:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">provider:</span> <span class="string">giscus</span></span><br><span class="line">  <span class="attr">giscus:</span></span><br><span class="line">    <span class="attr">repo:</span> <span class="string">dhdhus/dhdhus.github.io</span></span><br><span class="line">    <span class="attr">repo_id:</span> <span class="string">R_kgDOVIwyzw</span></span><br><span class="line">    <span class="attr">category:</span> <span class="string">Announcements</span></span><br><span class="line">    <span class="attr">category_id:</span> <span class="string">&quot;DIC_kwDOVIwyz84DMCBU&quot;</span></span><br><span class="line">    <span class="attr">mapping:</span> <span class="string">specific</span></span><br><span class="line">    <span class="attr">reactions_enabled:</span> <span class="number">1</span></span><br><span class="line">    <span class="attr">input_position:</span> <span class="string">top</span></span><br><span class="line">    <span class="attr">lang:</span> <span class="string">zh-CN</span></span><br></pre></td></tr></table></figure>
+
+<p><code>mapping: specific</code> 是关键。它让 giscus 用 <code>data-term</code> 里的字符串去匹配讨论，我传的是 <code>page.path</code>（比如 <code>2026/11/24/static-limits/</code>）。以后就算改 permalink 格式，老评论也不会丢，因为 term 没变。</p>
+<p><code>post.ejs</code> 里在正文之后插一块容器，条件渲染：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&lt;% if (theme.comments &amp;&amp; theme.comments.enable &amp;&amp; theme.comments.provider === &#x27;giscus&#x27;) &#123; %&gt;</span><br><span class="line">  &lt;% var gc = theme.comments.giscus; %&gt;</span><br><span class="line">  &lt;% if (gc.repo_id &amp;&amp; gc.category_id) &#123; %&gt;</span><br><span class="line">    &lt;section class=&quot;post-comments&quot; id=&quot;post-comments&quot;&gt;</span><br><span class="line">      &lt;div class=&quot;post-comments-head&quot;&gt;</span><br><span class="line">        &lt;span class=&quot;post-comments-title&quot;&gt;COMMENTS&lt;/span&gt;</span><br><span class="line">        &lt;span class=&quot;post-comments-hint&quot; id=&quot;comments-hint&quot;&gt;加载中…&lt;/span&gt;</span><br><span class="line">      &lt;/div&gt;</span><br><span class="line">      &lt;div class=&quot;giscus&quot; id=&quot;giscus-container&quot;&gt;&lt;/div&gt;</span><br><span class="line">    &lt;/section&gt;</span><br><span class="line">  &lt;% &#125; %&gt;</span><br><span class="line">&lt;% &#125; %&gt;</span><br></pre></td></tr></table></figure>
+
+<p>脚本动态建 <code>script</code> 标签，把所有 <code>data-*</code> 塞上去，由 giscus 自己把 iframe 注入 <code>#giscus-container</code>。这样比硬写一段 <code>&lt;script src=&quot;...&quot;&gt;</code> 灵活 —— 切换深浅色的时候能通过 <code>postMessage</code> 通知 iframe 换主题。</p>
+<h2 id="那个-150px-的空白"><a href="#那个-150px-的空白" class="headerlink" title="那个 150px 的空白"></a>那个 150px 的空白</h2><p>配好之后打开文章页，评论区一片白。查了才发现：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">iframe.giscus-frame  →  868 × 150,  style=&quot;opacity: 0&quot;</span><br></pre></td></tr></table></figure>
+
+<p>但 <code>client.js</code>、<code>default.css</code>、<code>/zh-CN/widget</code> 全是 200，网络面板里一点红都没有。</p>
+<p>做了个对照实验才找到原因。把完全相同的 12 个 <code>data-*</code> 属性做成静态页 <code>public/_gtest.html</code>，放在<strong>站点根目录</strong> —— iframe 正常渲染成 372px。同一份 HTML 挪到 <code>public/2026/11/24/static-limits/_t.html</code>，也就是深两层的路径 —— 永远 150px、永远透明。</p>
+<p>差别只有路径深度。这不是 category_id 的问题，不是跨域，也不是暗色主题。</p>
+<p>真凶是 giscus 自带的 <code>data-loading=&quot;lazy&quot;</code>。它内部用 IntersectionObserver 判断”有没有滚到评论区”，然后才 <code>postMessage</code> 告诉父页面还原高度。可它观察的目标在跨进程 iframe 里，加上我这套布局的滚动容器，那个”进入视口”的信号压根没触发过。轮询时序是这样的：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">t= 2s   没有 iframe</span><br><span class="line">t=10s   iframe 出现，h=150，opacity=0</span><br><span class="line">t=16s   opacity 变空字符串</span><br><span class="line">t=18s   才吐出 &#123;&quot;error&quot;:&quot;Discussion not found&quot;&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="改法：自己控制挂载时机"><a href="#改法：自己控制挂载时机" class="headerlink" title="改法：自己控制挂载时机"></a>改法：自己控制挂载时机</h2><p>把 lazy 去掉，改成我自己盯着容器。<code>mount()</code> 里注入 script 时一律 <code>eager</code>：</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="keyword">var</span> started = <span class="literal">false</span>;</span><br><span class="line"><span class="keyword">function</span> <span class="title function_">mount</span>(<span class="params"></span>) &#123;</span><br><span class="line">  <span class="keyword">if</span> (started) <span class="keyword">return</span>;</span><br><span class="line">  started = <span class="literal">true</span>;</span><br><span class="line">  <span class="keyword">var</span> s = <span class="variable language_">document</span>.<span class="title function_">createElement</span>(<span class="string">&#x27;script&#x27;</span>);</span><br><span class="line">  s.<span class="property">src</span> = <span class="string">&#x27;https://giscus.app/client.js&#x27;</span>;</span><br><span class="line">  s.<span class="title function_">setAttribute</span>(<span class="string">&#x27;data-loading&#x27;</span>, <span class="string">&#x27;eager&#x27;</span>);</span><br><span class="line">  <span class="comment">// ... 其余 data-* 属性</span></span><br><span class="line">  container.<span class="title function_">appendChild</span>(s);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (<span class="string">&#x27;IntersectionObserver&#x27;</span> <span class="keyword">in</span> <span class="variable language_">window</span>) &#123;</span><br><span class="line">  <span class="keyword">var</span> io = <span class="keyword">new</span> <span class="title class_">IntersectionObserver</span>(<span class="keyword">function</span> (<span class="params">entries</span>) &#123;</span><br><span class="line">    entries.<span class="title function_">forEach</span>(<span class="keyword">function</span> (<span class="params">e</span>) &#123;</span><br><span class="line">      <span class="keyword">if</span> (e.<span class="property">isIntersecting</span>) &#123; io.<span class="title function_">disconnect</span>(); <span class="title function_">mount</span>(); &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">  &#125;, &#123; <span class="attr">rootMargin</span>: <span class="string">&#x27;600px 0px&#x27;</span> &#125;);</span><br><span class="line">  io.<span class="title function_">observe</span>(container);</span><br><span class="line">  <span class="comment">// 兜底：8 秒还没滚到就无条件挂载</span></span><br><span class="line">  <span class="built_in">setTimeout</span>(<span class="keyword">function</span> (<span class="params"></span>) &#123; io.<span class="title function_">disconnect</span>(); <span class="title function_">mount</span>(); &#125;, <span class="number">8000</span>);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  <span class="title function_">mount</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>rootMargin: &#39;600px 0px&#39;</code> 的意思是提前 600px 就开始加载，读者滚到底的时候评论一般已经渲染好了。那个 8 秒兜底是防”用户从锚点直接跳进来、IntersectionObserver 没触发”这种情况。</p>
+<p>改完实测：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>分区高</th>
+<th>iframe 高</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>桌面浅色</td>
+<td>436</td>
+<td>372</td>
+<td>正常</td>
+</tr>
+<tr>
+<td>桌面暗色</td>
+<td>436</td>
+<td>372</td>
+<td><code>dark_dimmed</code> 生效</td>
+</tr>
+<tr>
+<td>移动 420×900 滚到底</td>
+<td>436</td>
+<td>372</td>
+<td>正常，无横向溢出</td>
+</tr>
+<tr>
+<td>线上 static-limits</td>
+<td>436</td>
+<td>372</td>
+<td>正常</td>
+</tr>
+</tbody></table>
+<h2 id="深浅色同步"><a href="#深浅色同步" class="headerlink" title="深浅色同步"></a>深浅色同步</h2><p>主题有 DARK_MODE 按钮，iframe 里的评论框得跟着变。giscus 支持通过 postMessage 换主题：</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="keyword">function</span> <span class="title function_">themeName</span>(<span class="params"></span>) &#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="variable language_">document</span>.<span class="property">documentElement</span>.<span class="title function_">getAttribute</span>(<span class="string">&#x27;data-theme&#x27;</span>) === <span class="string">&#x27;dark&#x27;</span></span><br><span class="line">    ? <span class="string">&#x27;dark_dimmed&#x27;</span> : <span class="string">&#x27;light&#x27;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">function</span> <span class="title function_">post</span>(<span class="params">msg</span>) &#123;</span><br><span class="line">  <span class="keyword">var</span> frame = <span class="variable language_">document</span>.<span class="title function_">querySelector</span>(<span class="string">&#x27;iframe.giscus-frame&#x27;</span>);</span><br><span class="line">  <span class="keyword">if</span> (frame) frame.<span class="property">contentWindow</span>.<span class="title function_">postMessage</span>(&#123; <span class="attr">giscus</span>: msg &#125;, <span class="string">&#x27;https://giscus.app&#x27;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">new</span> <span class="title class_">MutationObserver</span>(<span class="keyword">function</span> (<span class="params"></span>) &#123;</span><br><span class="line">  <span class="title function_">post</span>(&#123; <span class="attr">setConfig</span>: &#123; <span class="attr">theme</span>: <span class="title function_">themeName</span>() &#125; &#125;);</span><br><span class="line">&#125;).<span class="title function_">observe</span>(<span class="variable language_">document</span>.<span class="property">documentElement</span>, &#123;</span><br><span class="line">  <span class="attr">attributes</span>: <span class="literal">true</span>,</span><br><span class="line">  <span class="attr">attributeFilter</span>: [<span class="string">&#x27;data-theme&#x27;</span>]</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p><code>dark_dimmed</code> 是 giscus 自带的一套暗色，比 <code>dark</code> 更收敛一点，跟这个黑白像素风的主题放在一起不突兀。</p>
+<p>还要监听 iframe 发回来的消息做高度同步，否则评论区被撑开或收缩的时候外层不会跟着动：</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="variable language_">window</span>.<span class="title function_">addEventListener</span>(<span class="string">&#x27;message&#x27;</span>, <span class="keyword">function</span> (<span class="params">event</span>) &#123;</span><br><span class="line">  <span class="keyword">if</span> (event.<span class="property">origin</span> !== <span class="string">&#x27;https://giscus.app&#x27;</span>) <span class="keyword">return</span>;</span><br><span class="line">  <span class="keyword">var</span> data = event.<span class="property">data</span>;</span><br><span class="line">  <span class="keyword">if</span> (!data || !data.<span class="property">giscus</span>) <span class="keyword">return</span>;</span><br><span class="line">  <span class="keyword">if</span> (data.<span class="property">giscus</span>.<span class="property">resizeHeight</span>) &#123; <span class="comment">/* 调整容器高度 */</span> &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h2 id="结果"><a href="#结果" class="headerlink" title="结果"></a>结果</h2><p>现在每篇文章底部都有一个评论框。不用登录也能看，想说话就得用 GitHub 账号登一次。</p>
+<p>回头想想，最开始那个”加后端”的念头 —— 数据库、鉴权、接口、防刷 —— 在评论区这个需求上一条都不需要。静态站缺的是”存东西的地方”，而 GitHub Discussions 恰好就是免费的存东西的地方。真正的成本不是服务器，是接受”这块 UI 不归我管”。</p>
+<p>不过这只是把别人的服务嵌进来。下一篇想说的话题是：如果要做阅读量、点赞这种<strong>自己定义</strong>的数据，就没这么便宜了。</p>
+</div>
+
+  
+    
+    
+      <section class="post-comments" id="post-comments" aria-label="评论">
+        <div class="post-comments-head">
+          <span class="post-comments-title">COMMENTS</span>
+          <span class="post-comments-hint" id="comments-hint">加载中…</span>
+        </div>
+        <div class="giscus" id="giscus-container"></div>
+      </section>
+      <script>
+        (function () {
+          var root = document.documentElement;
+          var box = document.getElementById('giscus-container');
+          var hint = document.getElementById('comments-hint');
+          if (!box) return;
+
+          var TERM = "2026/11/26/giscus-comments/";
+          var CFG = {
+            repo: "dhdhus/dhdhus.github.io",
+            repoId: "R_kgDOVIwyzw",
+            category: "Announcements",
+            categoryId: "DIC_kwDOVIwyz84DMCBU",
+            mapping: "specific",
+            reactionsEnabled: "1",
+            inputPosition: "top",
+            lang: "zh-CN"
+          };
+
+          function themeName() {
+            return root.getAttribute('data-theme') === 'dark' ? 'dark_dimmed' : 'light';
+          }
+
+          function post(msg) {
+            var frame = box.querySelector('iframe.giscus-frame');
+            if (!frame || !frame.contentWindow) return;
+            frame.contentWindow.postMessage({ giscus: msg }, 'https://giscus.app');
+          }
+
+          // 用自己控制的 IntersectionObserver 决定何时加载：
+          // giscus 自带的 data-loading="lazy" 依赖它自己的 IO，滚动容器/布局
+          // 一变就再也触发不了，iframe 会永远停在 150px 空白。
+          // 这里改成"接近视口才注入脚本"，注入时一律 eager。
+          var started = false;
+          function mount() {
+            if (started) return;
+            started = true;
+
+            var script = document.createElement('script');
+            script.src = 'https://giscus.app/client.js';
+            script.async = true;
+            script.crossOrigin = 'anonymous';
+            script.setAttribute('data-repo', CFG.repo);
+            script.setAttribute('data-repo-id', CFG.repoId);
+            script.setAttribute('data-category', CFG.category);
+            script.setAttribute('data-category-id', CFG.categoryId);
+            script.setAttribute('data-mapping', CFG.mapping);
+            script.setAttribute('data-term', TERM);
+            script.setAttribute('data-reactions-enabled', CFG.reactionsEnabled);
+            script.setAttribute('data-emit-metadata', '0');
+            script.setAttribute('data-input-position', CFG.inputPosition);
+            script.setAttribute('data-theme', themeName());
+            script.setAttribute('data-lang', CFG.lang);
+            script.setAttribute('data-loading', 'eager');
+
+            script.onload = function () {
+              if (hint) hint.textContent = '由 giscus 提供，需 GitHub 账号登录';
+            };
+            script.onerror = function () {
+              var sec = document.getElementById('post-comments');
+              if (sec) sec.hidden = true;
+            };
+
+            box.appendChild(script);
+          }
+
+          if ('IntersectionObserver' in window) {
+            var io = new IntersectionObserver(function (entries) {
+              for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting) {
+                  io.disconnect();
+                  mount();
+                  return;
+                }
+              }
+            }, { rootMargin: '600px 0px' });
+            io.observe(box);
+            // 兜底：8 秒还没进视口就照常加载，避免 IO 被别的东西挡住
+            setTimeout(function () { io.disconnect(); mount(); }, 8000);
+          } else {
+            mount();
+          }
+
+          // 深浅色切换时同步 iframe 主题
+          new MutationObserver(function () {
+            post({ setConfig: { theme: themeName() } });
+          }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+
+          // giscus 会回报自己的高度，交给它自己处理，这里只在出错时兜底
+          window.addEventListener('message', function (event) {
+            if (event.origin !== 'https://giscus.app') return;
+            if (!event.data || !event.data.giscus) return;
+            if (hint) hint.classList.add('is-ready');
+          });
+        })();
+      </script>
+    
+  
+
+  
+    <nav class="post-nav">
+      
+      <a class="next" href="/2026/11/24/static-limits/">静态站的天花板：是时候加个后端了 →</a>
+    </nav>
+  
+</article>
+
+  </main>
+
+  <footer class="site-footer">
+    <a href="https://icp.gov.moe/?keyword=20260549" target="_blank" rel="noopener noreferrer">萌ICP备20260549号</a>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      var themeFadeTimer = 0;
+
+      function render() {
+        btn.textContent = root.getAttribute('data-theme') === 'dark' ? 'LIGHT_MODE' : 'DARK_MODE';
+      }
+
+      render();
+
+      btn.addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        var wantsMotion = !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (wantsMotion) {
+          root.classList.add('theme-fading');
+          window.clearTimeout(themeFadeTimer);
+          themeFadeTimer = window.setTimeout(function () {
+            root.classList.remove('theme-fading');
+          }, 400);
+        }
+
+        root.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem('lofi-theme', next);
+        } catch (e) {}
+        render();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var bar = document.querySelector('.list-bar');
+      var input = document.getElementById('search-input');
+      var panel = document.getElementById('search-results');
+      if (!bar || !input || !panel) return;
+
+      var indexUrl = bar.getAttribute('data-search-index');
+      var indexData = null;
+      var pending = null;
+      var timer = null;
+      var activeIndex = -1;
+
+      function decodeText(value) {
+        var holder = document.createElement('textarea');
+        holder.innerHTML = value == null ? '' : String(value);
+        return holder.value;
+      }
+
+      function loadIndex() {
+        if (indexData) return Promise.resolve(indexData);
+        if (pending) return pending;
+        pending = fetch(indexUrl)
+          .then(function (response) {
+            return response.ok ? response.json() : [];
+          })
+          .then(function (list) {
+            indexData = (list || []).map(function (item) {
+              return {
+                title: decodeText(item.title),
+                url: item.url,
+                content: decodeText(item.content).replace(/\s+/g, ' ')
+              };
+            });
+            return indexData;
+          })
+          .catch(function () {
+            indexData = [];
+            return indexData;
+          });
+        return pending;
+      }
+
+      function snippetOf(item, keyword) {
+        var text = item.content;
+        var pos = text.toLowerCase().indexOf(keyword);
+        if (pos < 0) return text.slice(0, 60);
+        var start = Math.max(0, pos - 18);
+        var head = start > 0 ? '…' : '';
+        var tail = start + 66 < text.length ? '…' : '';
+        return head + text.slice(start, start + 66) + tail;
+      }
+
+      function closePanel() {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        activeIndex = -1;
+      }
+
+      function renderResults(hits, keyword) {
+        panel.hidden = false;
+        panel.innerHTML = '';
+        activeIndex = -1;
+
+        if (!hits.length) {
+          var empty = document.createElement('p');
+          empty.className = 'search-empty';
+          empty.textContent = '没有找到匹配的文章';
+          panel.appendChild(empty);
+          return;
+        }
+
+        hits.slice(0, 8).forEach(function (item) {
+          var link = document.createElement('a');
+          link.className = 'search-item';
+          link.href = item.url;
+
+          var title = document.createElement('span');
+          title.className = 'search-item-title';
+          title.textContent = item.title;
+
+          var snippet = document.createElement('span');
+          snippet.className = 'search-item-snippet';
+          snippet.textContent = snippetOf(item, keyword);
+
+          link.appendChild(title);
+          link.appendChild(snippet);
+          panel.appendChild(link);
+        });
+      }
+
+      function runSearch() {
+        var keyword = input.value.trim().toLowerCase();
+        if (!keyword) {
+          closePanel();
+          return;
+        }
+        loadIndex().then(function (list) {
+          if (input.value.trim().toLowerCase() !== keyword) return;
+          var hits = list.filter(function (item) {
+            return item.title.toLowerCase().indexOf(keyword) >= 0 ||
+              item.content.toLowerCase().indexOf(keyword) >= 0;
+          });
+          renderResults(hits, keyword);
+        });
+      }
+
+      input.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(runSearch, 180);
+      });
+
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          input.value = '';
+          closePanel();
+          return;
+        }
+
+        var items = panel.hidden ? [] : Array.prototype.slice.call(panel.querySelectorAll('.search-item'));
+        if (!items.length) return;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          activeIndex = event.key === 'ArrowDown'
+            ? (activeIndex + 1) % items.length
+            : (activeIndex - 1 + items.length) % items.length;
+          items.forEach(function (el, i) {
+            el.classList.toggle('is-active', i === activeIndex);
+          });
+        } else if (event.key === 'Enter') {
+          var target = items[activeIndex >= 0 ? activeIndex : 0];
+          if (target) {
+            event.preventDefault();
+            window.location.href = target.getAttribute('href');
+          }
+        }
+      });
+
+      input.addEventListener('focus', function () {
+        if (input.value.trim()) runSearch();
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!bar.contains(event.target)) closePanel();
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sortBtn = document.getElementById('sort-toggle');
+      var list = document.querySelector('.post-list');
+      if (!sortBtn || !list) return;
+
+      var labels = { desc: '时间倒序 ↓', asc: '时间正序 ↑' };
+      var currentOrder = 'desc';
+      var FLIP_MS = 420;
+      var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function timestampOf(item) {
+        var time = item.querySelector('time[datetime]');
+        var value = time ? Date.parse(time.getAttribute('datetime')) : NaN;
+        return isNaN(value) ? 0 : value;
+      }
+
+      function apply(order, animate) {
+        var items = Array.prototype.slice.call(list.children);
+        var previousTop = new Map();
+
+        if (animate && !reducedMotion) {
+          items.forEach(function (item) {
+            previousTop.set(item, item.getBoundingClientRect().top);
+          });
+        }
+
+        var sorted = items.slice().sort(function (a, b) {
+          return order === 'asc' ? timestampOf(a) - timestampOf(b) : timestampOf(b) - timestampOf(a);
+        });
+
+        sorted.forEach(function (item) {
+          list.appendChild(item);
+        });
+
+        currentOrder = order;
+        sortBtn.textContent = labels[order];
+
+        if (!previousTop.size) return;
+
+        sorted.forEach(function (item) {
+          var before = previousTop.get(item);
+          if (before === undefined) return;
+
+          var delta = before - item.getBoundingClientRect().top;
+          if (!delta) return;
+
+          item.style.transition = 'none';
+          item.style.transform = 'translateY(' + delta + 'px)';
+          void item.offsetHeight;
+          item.style.transition = 'transform ' + FLIP_MS + 'ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+          item.style.transform = 'translateY(0)';
+
+          window.setTimeout(function () {
+            item.style.transition = '';
+            item.style.transform = '';
+          }, FLIP_MS + 60);
+        });
+      }
+
+      var savedOrder = 'desc';
+      try {
+        savedOrder = localStorage.getItem('lofi-sort') === 'asc' ? 'asc' : 'desc';
+      } catch (e) {}
+      apply(savedOrder, false);
+
+      sortBtn.addEventListener('click', function () {
+        var next = currentOrder === 'asc' ? 'desc' : 'asc';
+        apply(next, true);
+        try {
+          localStorage.setItem('lofi-sort', next);
+        } catch (e) {}
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var sprites = ["/images/91/thumb/1.png","/images/91/thumb/2.png","/images/91/thumb/3.png","/images/91/thumb/4.png"];
+      var matterUrl = '/js/matter.min.js';
+      var btn = document.getElementById('theme-toggle');
+      if (!btn || !sprites.length) return;
+
+      var CLICK_WINDOW = 2000;
+      var CLICK_NEEDED = 6;
+      var RAIN_MS = 10000;
+      var SPAWN_INTERVAL = 110;
+      var START_OFFSET = 60;
+      var MIN_WIDTH = 40;
+      var MAX_WIDTH = 110;
+      var TIME_SCALE = 0.5;
+      var STEP_MS = 16.666;
+      var REMOVE_MARGIN = 220;
+      var SPRING_STIFFNESS = 0.3;
+      var SPRING_DAMPING = 0.1;
+      var MAX_SQUEEZE = 0.25;
+
+      var clicks = [];
+      var running = false;
+      var engine = null;
+      var bodyItemMap = new Map();
+      var floorBody = null;
+      var sideWalls = [];
+      var layer = null;
+      var items = [];
+      var lastSpawn = 0;
+      var startedAt = 0;
+      var rafId = 0;
+      var matterReady = null;
+      var preloaded = false;
+
+      var spritesLoaded = sprites.map(function (src) {
+        var image = new Image();
+        image.src = src;
+        return image;
+      });
+
+      function viewport() {
+        return { w: window.innerWidth, h: window.innerHeight };
+      }
+
+      function loadMatter() {
+        if (window.Matter) return Promise.resolve(window.Matter);
+        if (matterReady) return matterReady;
+
+        matterReady = new Promise(function (resolve, reject) {
+          var tag = document.createElement('script');
+          tag.src = matterUrl;
+          tag.async = true;
+          tag.onload = function () {
+            resolve(window.Matter);
+          };
+          tag.onerror = function () {
+            matterReady = null;
+            reject(new Error('matter load failed'));
+          };
+          document.head.appendChild(tag);
+        });
+
+        return matterReady;
+      }
+
+      function warmUp() {
+        if (preloaded) return;
+        preloaded = true;
+        loadMatter().catch(function () {});
+      }
+
+      function buildWorld(Matter) {
+        var vp = viewport();
+        var localEngine = Matter.Engine.create();
+
+        localEngine.gravity.y = 1;
+        localEngine.timing.timeScale = TIME_SCALE;
+
+        var wallOptions = { isStatic: true, friction: 0.4, restitution: 0.1 };
+        var wallHeight = vp.h * 3;
+
+        sideWalls = [
+          Matter.Bodies.rectangle(-40, vp.h / 2, 80, wallHeight, wallOptions),
+          Matter.Bodies.rectangle(vp.w + 40, vp.h / 2, 80, wallHeight, wallOptions)
+        ];
+        floorBody = Matter.Bodies.rectangle(vp.w / 2, vp.h + 40, vp.w * 4, 80, wallOptions);
+
+        Matter.Composite.add(localEngine.world, sideWalls.concat([floorBody]));
+        return localEngine;
+      }
+
+      function sync(item) {
+        var body = item.body;
+        var left = body.position.x - item.w / 2;
+        var top = body.position.y - item.h / 2;
+        item.el.style.transform =
+          'translate3d(' + left + 'px,' + top + 'px,0) rotate(' + body.angle + 'rad)';
+      }
+
+      function updateDeform(item) {
+        if (!item.deform && !item.deformVel) {
+          if (item.scaleX !== 1 || item.scaleY !== 1) {
+            item.sprite.style.transform = '';
+            item.scaleX = 1;
+            item.scaleY = 1;
+          }
+          return;
+        }
+
+        item.deformVel += -SPRING_STIFFNESS * item.deform - SPRING_DAMPING * item.deformVel;
+        item.deform += item.deformVel;
+
+        if (Math.abs(item.deform) < 0.002 && Math.abs(item.deformVel) < 0.002) {
+          item.deform = 0;
+          item.deformVel = 0;
+        }
+
+        var scaleX = 1 - item.deform * item.deformAx;
+        var scaleY = 1 - item.deform * item.deformAy;
+
+        if (Math.abs(scaleX - item.scaleX) > 0.002 || Math.abs(scaleY - item.scaleY) > 0.002) {
+          item.scaleX = scaleX;
+          item.scaleY = scaleY;
+          item.sprite.style.transform =
+            'scale(' + scaleX.toFixed(3) + ',' + scaleY.toFixed(3) + ')';
+        }
+      }
+
+      function squeezeBody(body, normal, impact) {
+        var item = bodyItemMap.get(body.id);
+        if (!item) return;
+
+        var localAngle = Math.atan2(normal.y, normal.x) - body.angle;
+        item.deformAx = Math.abs(Math.cos(localAngle));
+        item.deformAy = Math.abs(Math.sin(localAngle));
+        item.deform = Math.max(item.deform, impact);
+        item.deformVel = 0;
+      }
+
+      function bindCollisions(Matter) {
+        Matter.Events.on(engine, 'collisionStart', function (event) {
+          var pairs = event.pairs;
+
+          for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i];
+            var velocityA = pair.bodyA.velocity;
+            var velocityB = pair.bodyB.velocity;
+            var dx = velocityA.x - velocityB.x;
+            var dy = velocityA.y - velocityB.y;
+            var impact = Math.min(MAX_SQUEEZE, Math.sqrt(dx * dx + dy * dy) * 0.07);
+
+            if (impact < 0.03) continue;
+
+            var normal = pair.collision.normal;
+            squeezeBody(pair.bodyA, normal, impact);
+            squeezeBody(pair.bodyB, normal, impact);
+          }
+        });
+      }
+
+      function spawn(Matter) {
+        var sprite = spritesLoaded[Math.floor(Math.random() * spritesLoaded.length)];
+        var width = MIN_WIDTH + Math.random() * (MAX_WIDTH - MIN_WIDTH);
+        var ratio = sprite.naturalWidth ? sprite.naturalHeight / sprite.naturalWidth : 1.3;
+        var height = width * ratio;
+        var vp = viewport();
+
+        var el = document.createElement('div');
+        el.className = 'egg-item';
+        el.style.width = width + 'px';
+        el.style.height = height + 'px';
+
+        var spriteEl = document.createElement('img');
+        spriteEl.className = 'egg-sprite';
+        spriteEl.src = sprite.src;
+        spriteEl.alt = '';
+        el.appendChild(spriteEl);
+        layer.appendChild(el);
+
+        var body = Matter.Bodies.rectangle(
+          width / 2 + Math.random() * Math.max(0, vp.w - width),
+          -height - START_OFFSET - Math.random() * 90,
+          width,
+          height,
+          {
+            restitution: 0.6,
+            friction: 0.3,
+            frictionStatic: 0.6,
+            frictionAir: 0.006,
+            density: 0.0012,
+            slop: 0.02
+          }
+        );
+
+        Matter.Body.setAngle(body, (Math.random() - 0.5) * 0.7);
+        Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+        Matter.Composite.add(engine.world, body);
+
+        var item = {
+          el: el,
+          sprite: spriteEl,
+          body: body,
+          w: width,
+          h: height,
+          deform: 0,
+          deformVel: 0,
+          deformAx: 1,
+          deformAy: 0,
+          scaleX: 1,
+          scaleY: 1
+        };
+
+        bodyItemMap.set(body.id, item);
+        sync(item);
+        items.push(item);
+      }
+
+      function removeItem(item) {
+        if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
+        if (engine) Matter.Composite.remove(engine.world, item.body);
+        bodyItemMap.delete(item.body.id);
+      }
+
+      function step(now) {
+        var Matter = window.Matter;
+        var vp = viewport();
+        var elapsed = now - startedAt;
+
+        if (elapsed < RAIN_MS) {
+          if (now - lastSpawn >= SPAWN_INTERVAL) {
+            lastSpawn = now;
+            spawn(Matter);
+          }
+        } else if (floorBody) {
+          Matter.Composite.remove(engine.world, floorBody);
+          floorBody = null;
+        }
+
+        Matter.Engine.update(engine, STEP_MS);
+
+        for (var i = items.length - 1; i >= 0; i--) {
+          var item = items[i];
+          updateDeform(item);
+          sync(item);
+
+          if (item.body.position.y - item.h / 2 > vp.h + REMOVE_MARGIN) {
+            removeItem(item);
+            items.splice(i, 1);
+          }
+        }
+
+        if (!floorBody && !items.length) {
+          stop();
+          return;
+        }
+
+        rafId = requestAnimationFrame(step);
+      }
+
+      function stop() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+
+        items = [];
+        floorBody = null;
+        sideWalls = [];
+        bodyItemMap.clear();
+
+        if (engine && window.Matter) {
+          window.Matter.Engine.clear(engine);
+        }
+        engine = null;
+
+        if (layer && layer.parentNode) layer.parentNode.removeChild(layer);
+        layer = null;
+        running = false;
+      }
+
+      function start() {
+        if (running) return;
+
+        loadMatter()
+          .then(function (Matter) {
+            if (!Matter || running) return;
+
+            running = true;
+            items = [];
+            lastSpawn = 0;
+            startedAt = performance.now();
+
+            layer = document.createElement('div');
+            layer.className = 'egg-layer';
+            layer.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(layer);
+
+            engine = buildWorld(Matter);
+            bindCollisions(Matter);
+            rafId = requestAnimationFrame(step);
+          })
+          .catch(function () {});
+      }
+
+      btn.addEventListener('click', function () {
+        warmUp();
+
+        var now = Date.now();
+        clicks = clicks.filter(function (stamp) {
+          return now - stamp < CLICK_WINDOW;
+        });
+        clicks.push(now);
+
+        if (running || clicks.length < CLICK_NEEDED) return;
+        clicks = [];
+        start();
+      });
+
+      window.addEventListener('resize', function () {
+        if (!running || !window.Matter) return;
+
+        var vp = viewport();
+
+        if (sideWalls.length === 2) {
+          window.Matter.Body.setPosition(sideWalls[0], { x: -40, y: vp.h / 2 });
+          window.Matter.Body.setPosition(sideWalls[1], { x: vp.w + 40, y: vp.h / 2 });
+        }
+        if (floorBody) {
+          window.Matter.Body.setPosition(floorBody, { x: vp.w / 2, y: vp.h + 40 });
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var body = document.body;
+      var HOME_URL = '/';
+      var ABOUT_URL = '/about/';
+      var ORDER = [HOME_URL, ABOUT_URL];
+      var NAV_KEY = 'lofi-nav';
+      var POST_KEY = 'lofi-post-rect';
+      var LEAVE_MS = 200;
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var busy = false;
+
+      function pageIndex() {
+        var path = window.location.pathname;
+        for (var i = 0; i < ORDER.length; i++) {
+          if (path === ORDER[i]) return i;
+        }
+        return -1;
+      }
+
+      function navigate(url, direction) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        try {
+          sessionStorage.setItem(NAV_KEY, direction);
+        } catch (e) {}
+
+        body.classList.add('nav-leave-' + direction);
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, LEAVE_MS);
+      }
+
+      /*
+        打开文章：把卡片的屏幕位置和尺寸交给下一个页面，
+        由那边用一个同样的矩形扩展成整页，形成"卡片长成页面"的连续感。
+      */
+      function navigatePost(url, card) {
+        if (busy) return;
+        busy = true;
+
+        if (reduced) {
+          window.location.href = url;
+          return;
+        }
+
+        var rect = card.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+
+        try {
+          sessionStorage.setItem(POST_KEY, '1');
+        } catch (e) {}
+
+        var expander = document.createElement('div');
+        expander.className = 'card-expander';
+        expander.style.transform =
+          'translate(' + rect.left + 'px,' + rect.top + 'px) scale(' +
+          rect.width / vw + ',' + rect.height / vh + ')';
+        document.body.appendChild(expander);
+
+        void expander.offsetWidth;
+
+        expander.style.transition = 'transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+        expander.style.transform = 'translate(0,0) scale(1,1)';
+
+        window.setTimeout(function () {
+          window.location.href = url;
+        }, 430);
+      }
+
+      function goForward() {
+        var index = pageIndex();
+        if (index < 0 || index + 1 >= ORDER.length) return;
+        navigate(ORDER[index + 1], 'forward');
+      }
+
+      function goBack() {
+        var index = pageIndex();
+        if (index < 0) {
+          navigate(HOME_URL, 'back');
+          return;
+        }
+        if (index <= 0) return;
+        navigate(ORDER[index - 1], 'back');
+      }
+
+      /* 左右滑动切换页面 */
+      var startX = 0;
+      var startY = 0;
+      var tracking = false;
+
+      /*
+        手指落在代码块、表格、输入框，或任何本身就能横向滚动的盒子里时，
+        横滑是在滚那块内容，不能趁机把整页翻走。
+      */
+      function withinScroller(target) {
+        var node = target;
+
+        while (node && node.nodeType === 1 && node !== document.body) {
+          var tag = node.tagName;
+
+          if (
+            tag === 'PRE' ||
+            tag === 'TABLE' ||
+            tag === 'TEXTAREA' ||
+            tag === 'INPUT' ||
+            tag === 'SELECT' ||
+            tag === 'IFRAME'
+          ) {
+            return true;
+          }
+
+          if (node.scrollWidth > node.clientWidth + 2) {
+            var overflowX = window.getComputedStyle(node).overflowX;
+            if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') {
+              return true;
+            }
+          }
+
+          node = node.parentNode;
+        }
+
+        return false;
+      }
+
+      document.addEventListener('touchstart', function (event) {
+        if (event.touches.length !== 1) {
+          tracking = false;
+          return;
+        }
+
+        if (withinScroller(event.target)) {
+          tracking = false;
+          return;
+        }
+
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        tracking = true;
+      }, { passive: true });
+
+      /* 一旦手势变成竖向滚动，就不再当成翻页 */
+      document.addEventListener('touchmove', function (event) {
+        if (!tracking) return;
+
+        var touch = event.touches && event.touches[0];
+        if (!touch) return;
+
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+
+        if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) tracking = false;
+      }, { passive: true });
+
+      document.addEventListener('touchend', function (event) {
+        if (!tracking) return;
+        tracking = false;
+
+        var touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+
+        if (Math.abs(dx) < 70) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+        if (dx < 0) goForward();
+        else goBack();
+      }, { passive: true });
+
+      /* 键盘左右方向键，桌面端也能翻页 */
+      document.addEventListener('keydown', function (event) {
+        var tag = (event.target && event.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (event.key === 'ArrowRight') goForward();
+        else if (event.key === 'ArrowLeft') goBack();
+      });
+
+      /* 站内链接：先播离场动画，再跳转 */
+      document.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        var link = event.target && event.target.closest ? event.target.closest('a') : null;
+        if (!link) return;
+
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) !== '/') return;
+        if (link.target && link.target !== '_self') return;
+
+        var url;
+        try {
+          url = new URL(link.href, window.location.href);
+        } catch (e) {
+          return;
+        }
+        if (url.origin !== window.location.origin) return;
+        if (url.pathname === window.location.pathname) return;
+
+        event.preventDefault();
+
+        var card = link.closest('.post-card');
+        if (card) {
+          navigatePost(url.pathname, card);
+          return;
+        }
+
+        var targetIndex = ORDER.indexOf(url.pathname);
+        var currentIndex = pageIndex();
+        var direction =
+          targetIndex >= 0 && currentIndex >= 0 && targetIndex < currentIndex ? 'back' : 'forward';
+        navigate(url.pathname, direction);
+      });
+
+      /* 文章卡片滚动进入视口时依次归位 */
+      var cards = document.querySelectorAll('.post-card');
+      if (cards.length) {
+        if ('IntersectionObserver' in window && !reduced) {
+          var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              var card = entry.target;
+              card.style.transitionDelay = (card.dataset.animIndex || 0) * 60 + 'ms';
+              card.classList.add('is-in');
+              observer.unobserve(card);
+            });
+          }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+          Array.prototype.forEach.call(cards, function (card, index) {
+            card.dataset.animIndex = index % 6;
+            observer.observe(card);
+          });
+        } else {
+          Array.prototype.forEach.call(cards, function (card) {
+            card.classList.add('is-in');
+          });
+        }
+      }
+    })();
+  </script>
+
+  <script>
+    (function () {
+      /*
+        还原速度按"每秒多少字"算，但长文章不能跟着无限变长：
+        只让前 CHAR_BUDGET 个字参与动画（余下的直接可见），总时长再夹在
+        MIN_DURATION ~ MAX_DURATION 之间，于是任何一页都在两秒内演完。
+      */
+      var SPEED = 520;
+      var MIN_DURATION = 360;
+      var MAX_DURATION = 2000;
+      var CHAR_BUDGET = 1000;
+      var POST_DELAY = 300;
+      var CHARS =
+        '的一是了我不人在他有这个上们来到时大地为子中你说生国年着就那和要她出也得里后自以会家可下而过天去能对小多然于心学么之都好看起发当没成只如事把还用第样道想作种开美总从无情己面最女但现前些所同日手又行意动方期它头经长儿回位分爱老因很给名法间斯知世什两次使身者被高已亲其进此话常与活正感';
+      var noMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (noMotion || !document.createTreeWalker) return;
+
+      var pool = '';
+
+      function randomChars(length) {
+        var out = '';
+        for (var i = 0; i < length; i++) {
+          out += CHARS.charAt(Math.floor(Math.random() * CHARS.length));
+        }
+        return out;
+      }
+
+      function garbles(length) {
+        while (pool.length < length + 64) {
+          pool += randomChars(256);
+        }
+        var offset = Math.floor(Math.random() * (pool.length - length));
+        return pool.substr(offset, length);
+      }
+
+      /* budget 是还能收多少字：收满了就停，超出的文字保持原样、不参与动画 */
+      function collect(root, budget) {
+        var list = [];
+        if (!root || budget <= 0) return list;
+
+        var used = 0;
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        var node = walker.nextNode();
+
+        while (node) {
+          var value = node.nodeValue;
+
+          if (value && value.replace(/\s/g, '').length) {
+            if (used >= budget) break;
+
+            /* 单个节点也可能超预算，只让它前面一段参与 */
+            if (used + value.length > budget) {
+              value = value.slice(0, budget - used);
+            }
+
+            list.push({ node: node, text: node.nodeValue, sliceTo: value.length });
+            used += value.length;
+          }
+
+          node = walker.nextNode();
+        }
+
+        return list;
+      }
+
+      /* 把若干区域的文字拼成一条序列，按进度从左到右、从上到下还原 */
+      function play(roots, delay, onReady) {
+        var entries = [];
+        var total = 0;
+        var budget = CHAR_BUDGET;
+
+        for (var i = 0; i < roots.length; i++) {
+          var found = collect(roots[i], budget - total);
+          for (var j = 0; j < found.length; j++) {
+            var full = found[j].text;
+            var animated = found[j].sliceTo;
+            entries.push({
+              node: found[j].node,
+              full: full,
+              length: animated,
+              start: total,
+              drawn: -1
+            });
+            total += animated;
+          }
+        }
+
+        if (!total) {
+          if (onReady) onReady();
+          return;
+        }
+
+        function draw(revealed) {
+          for (var k = 0; k < entries.length; k++) {
+            var entry = entries[k];
+            var length = entry.length;
+            var done = revealed - entry.start;
+
+            if (done < 0) done = 0;
+            else if (done > length) done = length;
+
+            if (done === entry.drawn) continue;
+
+            entry.drawn = done;
+            /* 只在参与动画的那一段上做文章，节点后面的原样文字始终留着 */
+            entry.node.nodeValue =
+              done >= length
+                ? entry.full
+                : entry.full.slice(0, done) +
+                  garbles(length - done) +
+                  entry.full.slice(length);
+          }
+        }
+
+        function animate() {
+          var startedAt = 0;
+          var duration = Math.min(
+            MAX_DURATION,
+            Math.max(MIN_DURATION, (total / SPEED) * 1000)
+          );
+
+          function tick(now) {
+            if (!startedAt) startedAt = now;
+
+            var progress = (now - startedAt) / duration;
+            if (progress > 1) progress = 1;
+
+            draw(Math.round(progress * total));
+
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              for (var m = 0; m < entries.length; m++) {
+                entries[m].node.nodeValue = entries[m].full;
+              }
+            }
+          }
+
+          requestAnimationFrame(tick);
+        }
+
+        /* 先整段变成乱码再解除隐藏，保证第一次被看到时就是乱码 */
+        draw(0);
+        if (onReady) onReady();
+
+        if (delay > 0) window.setTimeout(animate, delay);
+        else animate();
+      }
+
+      var postRoots = [];
+      var postTitle = document.querySelector('.post-title');
+      var postContent = document.querySelector('.post-content');
+
+      if (postTitle) postRoots.push(postTitle);
+      if (postContent) postRoots.push(postContent);
+
+      if (postRoots.length) {
+        /* 文章页：立刻变乱码并解除隐藏，等卡片扩展层揭开一点再开始逐字还原 */
+        play(postRoots, POST_DELAY, function () {
+          document.documentElement.classList.remove('decrypt-pending');
+        });
+        return;
+      }
+
+      /* 列表页：卡片进入视口时各自解密 */
+      var cards = document.querySelectorAll('.post-card');
+      if (!cards.length || !('IntersectionObserver' in window)) return;
+
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+
+          var roots = [];
+          var title = entry.target.querySelector('.post-card-title');
+          var excerpt = entry.target.querySelector('.post-card-excerpt');
+
+          if (title) roots.push(title);
+          if (excerpt) roots.push(excerpt);
+
+          play(roots, 0);
+        });
+      }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+
+      Array.prototype.forEach.call(cards, function (card) {
+        observer.observe(card);
+      });
+    })();
+  </script>
+
+</body>
+</html>
