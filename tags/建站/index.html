@@ -918,14 +918,67 @@
       var startY = 0;
       var tracking = false;
 
+      /*
+        手指落在代码块、表格、输入框，或任何本身就能横向滚动的盒子里时，
+        横滑是在滚那块内容，不能趁机把整页翻走。
+      */
+      function withinScroller(target) {
+        var node = target;
+
+        while (node && node.nodeType === 1 && node !== document.body) {
+          var tag = node.tagName;
+
+          if (
+            tag === 'PRE' ||
+            tag === 'TABLE' ||
+            tag === 'TEXTAREA' ||
+            tag === 'INPUT' ||
+            tag === 'SELECT' ||
+            tag === 'IFRAME'
+          ) {
+            return true;
+          }
+
+          if (node.scrollWidth > node.clientWidth + 2) {
+            var overflowX = window.getComputedStyle(node).overflowX;
+            if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') {
+              return true;
+            }
+          }
+
+          node = node.parentNode;
+        }
+
+        return false;
+      }
+
       document.addEventListener('touchstart', function (event) {
         if (event.touches.length !== 1) {
           tracking = false;
           return;
         }
+
+        if (withinScroller(event.target)) {
+          tracking = false;
+          return;
+        }
+
         startX = event.touches[0].clientX;
         startY = event.touches[0].clientY;
         tracking = true;
+      }, { passive: true });
+
+      /* 一旦手势变成竖向滚动，就不再当成翻页 */
+      document.addEventListener('touchmove', function (event) {
+        if (!tracking) return;
+
+        var touch = event.touches && event.touches[0];
+        if (!touch) return;
+
+        var dx = touch.clientX - startX;
+        var dy = touch.clientY - startY;
+
+        if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) tracking = false;
       }, { passive: true });
 
       document.addEventListener('touchend', function (event) {
@@ -1018,9 +1071,15 @@
 
   <script>
     (function () {
-      /* 固定"每秒还原多少字"，长度不同的内容自动得到不同的总时长，手感才一致 */
-      var SPEED = 80;
-      var MIN_DURATION = 400;
+      /*
+        还原速度按"每秒多少字"算，但长文章不能跟着无限变长：
+        只让前 CHAR_BUDGET 个字参与动画（余下的直接可见），总时长再夹在
+        MIN_DURATION ~ MAX_DURATION 之间，于是任何一页都在两秒内演完。
+      */
+      var SPEED = 520;
+      var MIN_DURATION = 360;
+      var MAX_DURATION = 2000;
+      var CHAR_BUDGET = 1000;
       var POST_DELAY = 300;
       var CHARS =
         '的一是了我不人在他有这个上们来到时大地为子中你说生国年着就那和要她出也得里后自以会家可下而过天去能对小多然于心学么之都好看起发当没成只如事把还用第样道想作种开美总从无情己面最女但现前些所同日手又行意动方期它头经长儿回位分爱老因很给名法间斯知世什两次使身者被高已亲其进此话常与活正感';
@@ -1046,18 +1105,30 @@
         return pool.substr(offset, length);
       }
 
-      function collect(root) {
+      /* budget 是还能收多少字：收满了就停，超出的文字保持原样、不参与动画 */
+      function collect(root, budget) {
         var list = [];
-        if (!root) return list;
+        if (!root || budget <= 0) return list;
 
+        var used = 0;
         var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
         var node = walker.nextNode();
 
         while (node) {
           var value = node.nodeValue;
+
           if (value && value.replace(/\s/g, '').length) {
-            list.push({ node: node, text: value });
+            if (used >= budget) break;
+
+            /* 单个节点也可能超预算，只让它前面一段参与 */
+            if (used + value.length > budget) {
+              value = value.slice(0, budget - used);
+            }
+
+            list.push({ node: node, text: node.nodeValue, sliceTo: value.length });
+            used += value.length;
           }
+
           node = walker.nextNode();
         }
 
@@ -1068,12 +1139,21 @@
       function play(roots, delay, onReady) {
         var entries = [];
         var total = 0;
+        var budget = CHAR_BUDGET;
 
         for (var i = 0; i < roots.length; i++) {
-          var found = collect(roots[i]);
+          var found = collect(roots[i], budget - total);
           for (var j = 0; j < found.length; j++) {
-            entries.push({ node: found[j].node, text: found[j].text, start: total, drawn: -1 });
-            total += found[j].text.length;
+            var full = found[j].text;
+            var animated = found[j].sliceTo;
+            entries.push({
+              node: found[j].node,
+              full: full,
+              length: animated,
+              start: total,
+              drawn: -1
+            });
+            total += animated;
           }
         }
 
@@ -1085,7 +1165,7 @@
         function draw(revealed) {
           for (var k = 0; k < entries.length; k++) {
             var entry = entries[k];
-            var length = entry.text.length;
+            var length = entry.length;
             var done = revealed - entry.start;
 
             if (done < 0) done = 0;
@@ -1094,14 +1174,22 @@
             if (done === entry.drawn) continue;
 
             entry.drawn = done;
+            /* 只在参与动画的那一段上做文章，节点后面的原样文字始终留着 */
             entry.node.nodeValue =
-              done >= length ? entry.text : entry.text.slice(0, done) + garbles(length - done);
+              done >= length
+                ? entry.full
+                : entry.full.slice(0, done) +
+                  garbles(length - done) +
+                  entry.full.slice(length);
           }
         }
 
         function animate() {
           var startedAt = 0;
-          var duration = Math.max(MIN_DURATION, (total / SPEED) * 1000);
+          var duration = Math.min(
+            MAX_DURATION,
+            Math.max(MIN_DURATION, (total / SPEED) * 1000)
+          );
 
           function tick(now) {
             if (!startedAt) startedAt = now;
@@ -1115,7 +1203,7 @@
               requestAnimationFrame(tick);
             } else {
               for (var m = 0; m < entries.length; m++) {
-                entries[m].node.nodeValue = entries[m].text;
+                entries[m].node.nodeValue = entries[m].full;
               }
             }
           }
